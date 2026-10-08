@@ -162,7 +162,7 @@ function fakeSb(){
   const dia = n => addDias(hoy, -n);
   const db = {
     ingresos:[
-      {id:'i1',fecha:hoy,concepto:'Jean palazzo T8',monto:75000,metodo:'Transferencia',canal:'WhatsApp',cliente:'Ana Sofía Gómez',nota:'Pedido WhatsApp nf-p1',created_at:hoy+'T15:10:00-05:00'},
+      {id:'i1',fecha:hoy,concepto:'Jean palazzo T8',monto:75000,metodo:'Transferencia',canal:'WhatsApp',cliente:'Ana Sofía Gómez',whatsapp:'573001234567',nota:'Pedido WhatsApp nf-p1',created_at:hoy+'T15:10:00-05:00'},
       {id:'i2',fecha:hoy,concepto:'Jean ajustable claro T10, Jean palazzo T8',monto:150000,metodo:'Transferencia',canal:'WhatsApp',cliente:'Laura Díaz',nota:'Pedido WhatsApp nf-p2',created_at:hoy+'T16:40:00-05:00'},
       {id:'i2b',fecha:hoy,concepto:'Jean ajustable T6',monto:75000,metodo:'Nequi',canal:'WhatsApp',cliente:'Paula Mora',nota:'Pedido WhatsApp nf-p4',created_at:hoy+'T17:05:00-05:00'},
       {id:'i2c',fecha:hoy,concepto:'Jean palazzo T10',monto:75000,metodo:'Nequi',canal:'WhatsApp',cliente:'Sara Gil',nota:'Pedido WhatsApp nf-p5',created_at:hoy+'T17:30:00-05:00'},
@@ -177,7 +177,7 @@ function fakeSb(){
       {id:'g2',fecha:dia(5),concepto:'Bolsas y etiquetas',monto:45000,categoria:'Insumos',metodo:'Efectivo',proveedor:'',factura:'',estado:'pagado',nota:'',created_at:dia(5)}
     ],
     pedidos:[
-      {id:'p1',idempotency_key:'nf-p1',created_at:hoy+'T15:10:00-05:00',fecha:hoy,cliente:'Ana Sofía Gómez',cedula:'1020304050',telefono:'3001234567',ciudad:'Montería',direccion:'Calle 1 #2-3, barrio Centro',items:[{nombre:'Jean palazzo',talla:'8',cantidad:1,precio:75000}],resumen:'Jean palazzo T8',valor:75000,estado:'por_enviar',comprobante_path:'demo.png',monto_comprobante:75000,banco_comprobante:'Nequi',referencia_comprobante:'M11111111'},
+      {id:'p1',idempotency_key:'nf-p1',created_at:hoy+'T15:10:00-05:00',fecha:hoy,cliente:'Ana Sofía Gómez',whatsapp:'573001234567',cedula:'1020304050',telefono:'3001234567',ciudad:'Montería',direccion:'Calle 1 #2-3, barrio Centro',items:[{nombre:'Jean palazzo',talla:'8',cantidad:1,precio:75000}],resumen:'Jean palazzo T8',valor:75000,estado:'por_enviar',comprobante_path:'demo.png',monto_comprobante:75000,banco_comprobante:'Nequi',referencia_comprobante:'M11111111'},
       {id:'p2',idempotency_key:'nf-p2',created_at:hoy+'T16:40:00-05:00',fecha:hoy,cliente:'Laura Díaz',cedula:'',telefono:'',ciudad:'',direccion:'',items:[{nombre:'Jean ajustable claro',talla:'10',cantidad:1,precio:75000},{nombre:'Jean palazzo',talla:'8',cantidad:1,precio:75000}],resumen:'Jean ajustable claro T10, Jean palazzo T8',valor:150000,estado:'confirmada',comprobante_path:'demo.png',monto_comprobante:100000,banco_comprobante:'Bancolombia',referencia_comprobante:'B22222222'},
       {id:'p3',idempotency_key:'nf-p3',created_at:dia(1)+'T12:00:00-05:00',fecha:dia(1),cliente:'Camila Ruiz',cedula:'99887766',telefono:'3105550000',ciudad:'Cali',direccion:'Carrera 5 #10-20',items:[{nombre:'Jean ajustable',talla:'6',cantidad:1,precio:75000}],resumen:'Jean ajustable T6',valor:75000,estado:'enviada',comprobante_path:'demo.png',monto_comprobante:75000,banco_comprobante:'Nequi',referencia_comprobante:'M33333333'},
       {id:'p4',idempotency_key:'nf-p4',created_at:hoy+'T17:05:00-05:00',fecha:hoy,cliente:'Paula Mora',cedula:'',telefono:'',ciudad:'',direccion:'',items:[{nombre:'Jean ajustable',talla:'6',cantidad:1,precio:75000}],resumen:'Jean ajustable T6',valor:75000,estado:'confirmada',comprobante_path:'demo.png',monto_comprobante:75000,banco_comprobante:'Nequi',referencia_comprobante:'M44444444'},
@@ -224,6 +224,8 @@ const suma = (a,f=x=>x.monto) => a.reduce((s,x)=>s+(Number(f(x))||0),0);
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const horaBogota = iso => parseInt(new Date(iso).toLocaleTimeString('en-GB',{timeZone:'America/Bogota',hour:'2-digit',hour12:false}),10);
 const horaTxt = iso => new Date(iso).toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit'});
+const telFmt = n => { const d=String(n||'').replace(/\D/g,''); return d.length===12&&d.startsWith('57') ? `+57 ${d.slice(2,5)} ${d.slice(5,8)} ${d.slice(8)}` : (d?'+'+d:''); };
+const waLink = n => { const d=String(n||'').replace(/\D/g,''); return d?`<a href="https://wa.me/${d}" target="_blank" rel="noopener" style="color:var(--brand-d);font-weight:600">${telFmt(d)}</a>`:'—'; };
 const ESTADO_PED = { confirmada:['Pagado · faltan datos','conf'], por_enviar:['Por enviar','env'], enviada:['Enviada','ok'] };
 
 const sb = DEMO ? fakeSb() : supabase.createClient(SUPA_URL, SUPA_KEY);
@@ -313,7 +315,7 @@ function vistaIngresos(){
   const total=suma(S.ing); const porDia={}; S.ing.forEach(x=>(porDia[x.fecha]=porDia[x.fecha]||[]).push(x));
   const dias=Object.keys(porDia).sort().reverse();
   return `${selectorMes()}<div class="card"><div class="lbl">Total del mes</div><div class="big">${fmt(total)}</div><div class="sub">${S.ing.length} ingreso${S.ing.length===1?'':'s'}</div></div>
-  ${dias.length?dias.map(d=>`<div class="daytitle"><span>${nombreDia(d)}</span><span>${fmt(suma(porDia[d]))}</span></div><div class="card" style="padding:4px 17px">${porDia[d].map(x=>`<div class="row" data-act="ver-ing" data-id="${x.id}"><div><div class="t">${esc(x.concepto)}</div><div class="s">${[x.cliente,x.metodo,x.canal].filter(Boolean).map(esc).join(' · ')}</div></div><div class="m">${fmt(x.monto)}</div></div>`).join('')}</div>`).join(''):'<div class="empty">No hay ingresos este mes.</div>'}
+  ${dias.length?dias.map(d=>`<div class="daytitle"><span>${nombreDia(d)}</span><span>${fmt(suma(porDia[d]))}</span></div><div class="card" style="padding:4px 17px">${porDia[d].map(x=>`<div class="row" data-act="ver-ing" data-id="${x.id}"><div><div class="t">${esc(x.concepto)}</div><div class="s">${[x.cliente,x.whatsapp?telFmt(x.whatsapp):'',x.metodo,x.canal].filter(Boolean).map(esc).join(' · ')}</div></div><div class="m">${fmt(x.monto)}</div></div>`).join('')}</div>`).join(''):'<div class="empty">No hay ingresos este mes.</div>'}
   <button class="btn fab" data-act="nuevo-ing">${ico('mas','s')} Ingreso</button>`;
 }
 function vistaPedidos(){
@@ -321,7 +323,7 @@ function vistaPedidos(){
   const lista = S.filtroPed==='todos'?S.ped:S.ped.filter(p=>p.estado===S.filtroPed);
   const chips=[['por_enviar','Por enviar'],['confirmada','Faltan datos'],['enviada','Enviadas'],['todos','Todos']].map(([k,l])=>`<button class="chip ${S.filtroPed===k?'on':''}" data-act="filtro-ped" data-id="${k}">${l} (${cuentas[k]||0})</button>`).join('');
   return `<div class="chips" style="margin-top:16px">${chips}</div>${lista.length?lista.map(p=>{ const [et,cl]=ESTADO_PED[p.estado]||[p.estado,'conf']; return `<div class="card" style="margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><div class="t" style="font-weight:600">${esc(p.cliente||'Sin nombre')}</div><div class="s" style="font-size:12.5px;color:var(--muted)">${new Date(p.created_at).toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'})}</div></div><span class="pill ${cl}">${et}</span></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><div class="t" style="font-weight:600">${esc(p.cliente||'Sin nombre')}</div><div class="s" style="font-size:12.5px;color:var(--muted)">${new Date(p.created_at).toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'})}${p.whatsapp?' · '+waLink(p.whatsapp):''}</div></div><span class="pill ${cl}">${et}</span></div>
     <div style="margin:9px 0 4px;font-size:14px">${esc(p.resumen||'')}</div><div style="font-weight:600">${fmt(p.valor)}</div>
     ${p.direccion?`<div class="s" style="font-size:13px;color:var(--ink2);margin-top:8px;line-height:1.55">${esc(p.direccion)}, ${esc(p.ciudad)}<br>${esc(p.cliente)} · CC ${esc(p.cedula)} · Tel ${esc(p.telefono)}</div>`:'<div class="s" style="font-size:12.5px;color:var(--muted);margin-top:8px">Aún no ha enviado sus datos de envío.</div>'}
     <div class="acts">${p.comprobante_path?`<button class="btn ghost sm" data-act="ver-comp" data-id="${p.id}">${ico('recibo','s')} Comprobante</button>`:''}${p.direccion?`<button class="btn ghost sm" data-act="copiar-envio" data-id="${p.id}">${ico('copiar','s')} Copiar datos</button>`:''}${p.estado==='por_enviar'?`<button class="btn green sm" data-act="estado-ped" data-id="${p.id}" data-v="enviada">Marcar enviada</button>`:''}${p.estado==='enviada'?`<button class="btn ghost sm" data-act="estado-ped" data-id="${p.id}" data-v="por_enviar">Volver a "por enviar"</button>`:''}</div></div>`; }).join(''):'<div class="empty">No hay pedidos en esta lista.</div>'}`;
@@ -392,7 +394,7 @@ function vistaConciliar(){
     </div>
     ${difBloque}
     <h3 class="sec">Para revisar (${a.anoms.length})</h3>
-    <div class="card" style="padding:4px 17px">${a.anoms.length?a.anoms.map(x=>`<div class="anom" data-act="ver-comp-ped" data-id="${x.p.id}"><span class="dot ${x.tipo}"></span><div style="flex:1"><div class="t" style="font-weight:600;font-size:14.5px">${esc(x.p.cliente||'Sin nombre')} · ${fmt(x.p.valor)} <span class="s" style="font-weight:400;color:var(--muted);font-size:12.5px">${x.hora}</span></div><div class="s" style="font-size:13px;color:var(--ink2);margin-top:2px">${x.txt}</div></div>${x.p.comprobante_path?ico('recibo','s'):''}</div>`).join(''):'<div class="empty">Todo cuadra: cada venta tiene su comprobante y el monto coincide.</div>'}</div>
+    <div class="card" style="padding:4px 17px">${a.anoms.length?a.anoms.map(x=>`<div class="anom" data-act="ver-comp-ped" data-id="${x.p.id}"><span class="dot ${x.tipo}"></span><div style="flex:1"><div class="t" style="font-weight:600;font-size:14.5px">${esc(x.p.cliente||'Sin nombre')} · ${fmt(x.p.valor)}${x.p.whatsapp?' · <span class="s" style="font-weight:400;color:var(--muted);font-size:12.5px">'+telFmt(x.p.whatsapp)+'</span>':''} <span class="s" style="font-weight:400;color:var(--muted);font-size:12.5px">${x.hora}</span></div><div class="s" style="font-size:13px;color:var(--ink2);margin-top:2px">${x.txt}</div></div>${x.p.comprobante_path?ico('recibo','s'):''}</div>`).join(''):'<div class="empty">Todo cuadra: cada venta tiene su comprobante y el monto coincide.</div>'}</div>
     <div class="sub" style="margin-top:8px">${a.ped.length?`${pasados} de ${a.ped.length} ventas sin observaciones.`:'No hay ventas del bot en este período.'} Toca una fila para ver el comprobante.</div>`;
 }
 
@@ -444,7 +446,7 @@ async function verIngreso(id){
   const x=S.ing.find(i=>i.id===id); if(!x) return;
   const m=(x.nota||'').match(/(nf-[A-Za-z0-9_-]+)/); let ped=null;
   if(m){ try{ ped=(await q(sb.from('pedidos').select('*').eq('idempotency_key',m[1])))[0]||null; }catch(e){} }
-  abrirModal(`<h3>${esc(x.concepto)}</h3><div class="kv"><b>Monto</b><span>${fmt(x.monto)}</span><b>Fecha</b><span>${nombreDia(x.fecha)}</span><b>Cliente</b><span>${esc(x.cliente||'—')}</span><b>Método</b><span>${esc(x.metodo)}</span><b>Canal</b><span>${esc(x.canal||'—')}</span>${ped&&ped.monto_comprobante!=null?`<b>Comprobante</b><span>${fmt(ped.monto_comprobante)}${ped.banco_comprobante?' · '+esc(ped.banco_comprobante):''}${ped.referencia_comprobante?' · ref. '+esc(ped.referencia_comprobante):''}</span>`:''}<b>Nota</b><span>${esc(x.nota||'—')}</span></div>
+  abrirModal(`<h3>${esc(x.concepto)}</h3><div class="kv"><b>Monto</b><span>${fmt(x.monto)}</span><b>Fecha</b><span>${nombreDia(x.fecha)}</span><b>Cliente</b><span>${esc(x.cliente||'—')}</span><b>WhatsApp</b><span>${waLink(x.whatsapp||(ped&&ped.whatsapp))}</span><b>Método</b><span>${esc(x.metodo)}</span><b>Canal</b><span>${esc(x.canal||'—')}</span>${ped&&ped.monto_comprobante!=null?`<b>Comprobante</b><span>${fmt(ped.monto_comprobante)}${ped.banco_comprobante?' · '+esc(ped.banco_comprobante):''}${ped.referencia_comprobante?' · ref. '+esc(ped.referencia_comprobante):''}</span>`:''}<b>Nota</b><span>${esc(x.nota||'—')}</span></div>
   <div class="acts">${ped&&ped.comprobante_path?`<button class="btn ghost sm" data-act="ver-comp-path" data-id="${esc(ped.comprobante_path)}">${ico('recibo','s')} Ver comprobante</button>`:''}<button class="btn red sm" data-act="borrar-ing" data-id="${x.id}">Eliminar</button><button class="btn ghost sm" data-act="cerrar">Cerrar</button></div>`);
 }
 function verGasto(id){
