@@ -381,6 +381,16 @@ const DB = {
     const {error} = await sb.from('nf_productos').delete().eq('id',id);
     if(error) throw error;
   },
+  async cargarLive(){
+    const {data,error} = await sb.from('nf_bot_estado').select('modo_live,producto_live').eq('id',1).single();
+    if(error) throw error;
+    return data;
+  },
+  async guardarLive(patch){
+    const {data,error} = await sb.from('nf_bot_estado').update(patch).eq('id',1).select('modo_live,producto_live').single();
+    if(error) throw error;
+    return data;
+  },
   async subirFoto(file,id){
     const resized = await redimensionarImagen(file, 1500, 0.85);
     const path = `productos/${id}.jpg`;
@@ -480,6 +490,8 @@ function Editor({item, onSave, onClose}){
 
   async function handleSave(){
     if(!f.nombre.trim()){ toast('Escribe el nombre del producto'); return; }
+    const pr = Number(f.precio);
+    if(f.precio!=='' && pr>0 && pr<1000){ toast('El precio parece incompleto: escribe 75000 (no 75)'); return; }
     setSaving(true);
     try{
       const saved = await DB.guardar(f);
@@ -705,6 +717,81 @@ function PedidosView({productos}){
   );
 }
 
+/* ── LIVE ── */
+const MSG_LIVE = `📲 *Compra por WhatsApp en este live: 300 354 7932*
+1️⃣ Escribe *QUIERO talla 8* (cambia el 8 por tu talla). Si quieres otro jean: *QUIERO jean palazzo talla 10*.
+2️⃣ El bot te manda los datos de pago. Transfiere y envíale la *foto del comprobante*.
+3️⃣ Cuando confirmemos tu pago, te pide en *un solo mensaje*: nombre, cédula, teléfono, dirección y ciudad.
+⚠️ Escribe en *texto* (no audios), un mensaje a la vez. Tienes *15 minutos* para pagar o se libera tu jean.`;
+
+function LiveView({productos}){
+  const [estado, setEstado] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  useEffect(()=>{ DB.cargarLive().then(setEstado).catch(e=>toast('Error: '+e.message)); },[]);
+
+  async function cambiar(patch){
+    setGuardando(true);
+    try{ setEstado(await DB.guardarLive(patch)); toast('✓ Guardado'); }
+    catch(e){ toast('Error: '+e.message); }
+    setGuardando(false);
+  }
+  async function copiar(){
+    try{ await navigator.clipboard.writeText(MSG_LIVE); toast('Instrucciones copiadas ✓'); }
+    catch(e){ toast('No se pudo copiar, selecciona el texto y cópialo'); }
+  }
+
+  if(!estado) return <div className="loading-page"><div className="spinner"/></div>;
+  const activo = !!estado.modo_live;
+  const vendibles = productos.filter(p=>Number(p.precio)>=1000);
+
+  return (
+    <div style={{padding:'1rem 1.25rem 3rem',maxWidth:720,margin:'0 auto'}}>
+      <div style={{background:activo?'var(--red-l)':'var(--white)',border:'1.5px solid '+(activo?'var(--red)':'var(--border)'),borderRadius:'var(--r)',padding:'1rem 1.1rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+        <div>
+          <div style={{fontWeight:600,fontSize:16}}>{activo?'🔴 Modo Live ACTIVO':'⚪ Modo Live apagado'}</div>
+          <div style={{fontSize:13,color:'var(--night-3)',marginTop:4}}>
+            {activo ? 'El bot responde más corto, no manda fotos por su cuenta y atiende más rápido.' : 'Préndelo cuando empieces el live.'}
+          </div>
+        </div>
+        <button className={`btn btn-lg ${activo?'btn-danger-soft':'btn-primary'}`} disabled={guardando} onClick={()=>cambiar({modo_live:!activo})}>
+          {activo?'Apagar':'Prender'}
+        </button>
+      </div>
+
+      <h3 style={{margin:'1.4rem 0 .3rem',fontSize:15}}>¿Qué jean estás mostrando ahora?</h3>
+      <p style={{fontSize:13,color:'var(--night-3)',marginBottom:'.7rem'}}>
+        Si una clienta escribe solo "quiero talla 8" o "ese", el bot entiende que habla de este jean. Cámbialo cada vez que muestres otro.
+      </p>
+      <div style={{display:'grid',gap:8}}>
+        <button className={`chip ${!estado.producto_live?'on':''}`} style={{justifySelf:'start'}} disabled={guardando} onClick={()=>cambiar({producto_live:null})}>Ninguno</button>
+        {vendibles.length===0 && <div style={{fontSize:13,color:'var(--night-3)'}}>No hay jeans con precio válido en el inventario.</div>}
+        {vendibles.map(p=>{
+          const sel = estado.producto_live===p.id;
+          const agotado = stockTotal(p)===0;
+          return (
+            <button key={p.id} disabled={guardando} onClick={()=>cambiar({producto_live:p.id})}
+              style={{display:'flex',alignItems:'center',gap:12,textAlign:'left',padding:'8px 10px',borderRadius:'var(--r)',cursor:'pointer',
+                border:'2px solid '+(sel?'var(--blush-d)':'var(--border)'),background:sel?'var(--blush-l)':'var(--white)',opacity:agotado?.55:1,fontFamily:'inherit'}}>
+              <div style={{width:48,height:64,borderRadius:8,overflow:'hidden',background:'var(--blush-l)',flex:'none'}}>
+                {p.foto_url && <img src={p.foto_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:14}}>{p.nombre}</div>
+                <div style={{fontSize:12,color:'var(--night-3)'}}>{fmt(p.precio)} · {agotado?'Agotado':stockTotal(p)+' unidades'}</div>
+              </div>
+              {sel && <div style={{fontSize:12,fontWeight:600,color:'var(--blush-dd)'}}>🔴 En vivo</div>}
+            </button>
+          );
+        })}
+      </div>
+
+      <h3 style={{margin:'1.6rem 0 .5rem',fontSize:15}}>Mensaje para las clientas del live</h3>
+      <pre style={{whiteSpace:'pre-wrap',fontFamily:'inherit',fontSize:13,background:'var(--white)',border:'1.5px solid var(--border)',borderRadius:'var(--r)',padding:'12px 14px',lineHeight:1.5}}>{MSG_LIVE}</pre>
+      <button className="btn btn-primary btn-lg" style={{marginTop:10}} onClick={copiar}>📋 Copiar mensaje</button>
+    </div>
+  );
+}
+
 /* ── LOGIN ── */
 function Login({onLogin}){
   const [pwd, setPwd] = useState('');
@@ -810,9 +897,10 @@ function App(){
       <div className="tabs">
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
         <button className={`tab ${view==='pedidos'?'on':''}`} onClick={()=>setView('pedidos')}>Pedidos vendidos</button>
+        <button className={`tab ${view==='live'?'on':''}`} onClick={()=>setView('live')}>🔴 Live</button>
       </div>
 
-      {view==='pedidos' ? <PedidosView productos={prods}/> : <>
+      {view==='pedidos' ? <PedidosView productos={prods}/> : view==='live' ? <LiveView productos={prods}/> : <>
 
       {/* STATS */}
       <div className="stats-bar">
