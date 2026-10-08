@@ -759,7 +759,7 @@ function LiveView({productos}){
     <div style={{padding:'1rem 1.25rem 3rem',maxWidth:720,margin:'0 auto'}}>
       <div style={{background:activo?'var(--red-l)':'var(--white)',border:'1.5px solid '+(activo?'var(--red)':'var(--border)'),borderRadius:'var(--r)',padding:'1rem 1.1rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
         <div>
-          <div style={{fontWeight:600,fontSize:16}}>{activo?'🔴 Modo Live ACTIVO':'⚪ Modo Live apagado'}</div>
+          <div style={{fontWeight:600,fontSize:16}}>{activo?'Modo Live ACTIVO':'Modo Live apagado'}</div>
           <div style={{fontSize:13,color:'var(--night-3)',marginTop:4}}>
             {activo ? 'El bot responde más corto, no manda fotos por su cuenta y atiende más rápido.' : 'Prende el modo live cuando empieces el live y apágalo al terminar.'}
           </div>
@@ -788,7 +788,7 @@ function LiveView({productos}){
                 <div style={{fontSize:12,color:'var(--night-3)'}}>{fmt(p.precio)} · {stockTotal(p)===0?'Agotado':stockTotal(p)+' uds'}</div>
                 <button disabled={guardando} onClick={()=>cambiar({producto_live:ahora?null:p.id})}
                   style={{marginTop:4,fontSize:12,fontWeight:600,border:'none',borderRadius:6,padding:'3px 8px',cursor:'pointer',fontFamily:'inherit',background:ahora?'var(--blush-d)':'var(--mist)',color:ahora?'white':'var(--night-2)'}}>
-                  {ahora?'🔴 En pantalla':'Marcar en pantalla'}
+                  {ahora?'En pantalla':'Marcar en pantalla'}
                 </button>
               </div>
               <div style={{display:'flex',gap:4}}>
@@ -822,7 +822,7 @@ function LiveView({productos}){
 
       <h3 style={{margin:'1.6rem 0 .5rem',fontSize:15}}>Mensaje para las clientas del live</h3>
       <pre style={{whiteSpace:'pre-wrap',fontFamily:'inherit',fontSize:13,background:'var(--white)',border:'1.5px solid var(--border)',borderRadius:'var(--r)',padding:'12px 14px',lineHeight:1.5}}>{MSG_LIVE}</pre>
-      <button className="btn btn-primary btn-lg" style={{marginTop:10}} onClick={copiar}>📋 Copiar mensaje</button>
+      <button className="btn btn-primary btn-lg" style={{marginTop:10}} onClick={copiar}>Copiar mensaje</button>
     </div>
   );
 }
@@ -932,7 +932,7 @@ function App(){
       <div className="tabs">
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
         <button className={`tab ${view==='pedidos'?'on':''}`} onClick={()=>setView('pedidos')}>Pedidos vendidos</button>
-        <button className={`tab ${view==='live'?'on':''}`} onClick={()=>setView('live')}>🔴 Live</button>
+        <button className={`tab ${view==='live'?'on':''}`} onClick={()=>setView('live')}>Live</button>
       </div>
 
       {view==='pedidos' ? <PedidosView productos={prods}/> : view==='live' ? <LiveView productos={prods}/> : <>
