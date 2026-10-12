@@ -231,7 +231,7 @@ const waLink = n => { const d=String(n||'').replace(/\D/g,''); return d?`<a href
 const ESTADO_PED = { confirmada:['Pagado · faltan datos','conf'], por_enviar:['Por enviar','env'], enviada:['Enviada','ok'] };
 
 const sb = DEMO ? fakeSb() : supabase.createClient(SUPA_URL, SUPA_KEY);
-const S = { user:null, tab:'resumen', mes:mesDe(hoyBogota()), cargando:false, error:'', ped:[], filtroPed:'por_enviar', ing:[], gas:[], pend:[], res:null,
+const S = { user:null, tab:'resumen', mes:mesDe(hoyBogota()), mesRes:mesDe(hoyBogota()), cargando:false, error:'', ped:[], filtroPed:'por_enviar', ing:[], gas:[], pend:[], res:null,
   con:{ dia:hoyBogota(), desde:'', hasta:'', cuenta:'', ped:[], ing:[], todosRef:[] }, login:{err:'',cargando:false} };
 
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
@@ -242,12 +242,12 @@ async function cargar(){
   S.cargando=true; S.error=''; render();
   try{
     if(S.tab==='resumen'){
-      const hoy=hoyBogota(), mm=mesDe(hoy), ini=mesAnt(mm)+'-01';
+      const mm=S.mesRes, fin=mesSig(mm)+'-01'; let ini=mm; for(let k=0;k<6;k++) ini=mesAnt(ini); ini+='-01';
       const [ing,gas,pend,ped,porEnv] = await Promise.all([
-        q(sb.from('ingresos').select('*').gte('fecha',ini).order('fecha',{ascending:false})),
-        q(sb.from('gastos').select('*').gte('fecha',mm+'-01')),
+        q(sb.from('ingresos').select('*').gte('fecha',ini).lt('fecha',fin).order('fecha',{ascending:false})),
+        q(sb.from('gastos').select('*').gte('fecha',ini).lt('fecha',fin)),
         q(sb.from('gastos').select('*').eq('estado','pendiente')),
-        q(sb.from('pedidos').select('*').gte('fecha',mm+'-01')),
+        q(sb.from('pedidos').select('*').gte('fecha',mm+'-01').lt('fecha',fin)),
         q(sb.from('pedidos').select('id').eq('estado','por_enviar'))
       ]);
       S.res={ing,gas,pend,ped,porEnviar:porEnv.length};
@@ -275,42 +275,50 @@ async function cargar(){
 }
 
 /* ---------- vistas ---------- */
+function selectorMesRes(){ return `<div class="mes"><button class="iconbtn" data-act="res-prev" aria-label="Mes anterior">${ico('izq','s')}</button><b>${nombreMes(S.mesRes)}</b><button class="iconbtn" data-act="res-next" aria-label="Mes siguiente" ${S.mesRes>=mesDe(hoyBogota())?'disabled':''}>${ico('der','s')}</button></div>`; }
 function vistaResumen(){
   if(!S.res) return '';
-  const {ing,gas,pend,ped} = S.res; const hoy=hoyBogota(), ayer=addDias(hoy,-1), mm=mesDe(hoy), ma=mesAnt(mm);
+  const {ing,gas,pend,ped} = S.res; const hoy=hoyBogota(), ayer=addDias(hoy,-1), mm=S.mesRes, ma=mesAnt(mm), esActual=(mm===mesDe(hoy));
+  const sMes = ing.filter(x=>mesDe(x.fecha)===mm), gMes = gas.filter(x=>mesDe(x.fecha)===mm);
+  const ingMes=suma(sMes), gastoMes=suma(gMes), utilidad=ingMes-gastoMes, porPagar=suma(pend);
   const dHoy = +hoy.slice(8);
-  const sHoy = ing.filter(x=>x.fecha===hoy), sAyer = ing.filter(x=>x.fecha===ayer);
-  const sSem = ing.filter(x=>x.fecha>addDias(hoy,-7)&&x.fecha<=hoy);
-  const sMes = ing.filter(x=>mesDe(x.fecha)===mm);
-  const sMesAntMismoPeriodo = ing.filter(x=>mesDe(x.fecha)===ma && +x.fecha.slice(8)<=dHoy);
-  const ingMes=suma(sMes), antMis=suma(sMesAntMismoPeriodo);
-  const gastoMes=suma(gas), utilidad=ingMes-gastoMes, porPagar=suma(pend);
-  let cmp=''; if(antMis>0){ const pct=Math.round((ingMes-antMis)/antMis*100); cmp=`<div class="sub ${pct>=0?'up':'down'}">${pct>=0?'+':'-'}${Math.abs(pct)}% frente al mismo período del mes pasado</div>`; }
-  else if(ingMes>0) cmp='<div class="sub">Sin datos del mes pasado para comparar</div>';
-  const dias=[...Array(14)].map((_,i)=>addDias(hoy,-(13-i))); const tot=dias.map(d=>suma(ing.filter(x=>x.fecha===d)));
-  const mx=Math.max(...tot,1);
+  const antMis = suma(ing.filter(x=>mesDe(x.fecha)===ma && (!esActual || +x.fecha.slice(8)<=dHoy)));
+  let cmp=''; if(antMis>0){ const pct=Math.round((ingMes-antMis)/antMis*100); cmp=`<div class="sub ${pct>=0?'up':'down'}">${pct>=0?'+':'-'}${Math.abs(pct)}% frente ${esActual?'al mismo período del mes pasado':'a '+nombreMes(ma)}</div>`; }
+  else if(ingMes>0) cmp='<div class="sub">Sin datos del mes anterior para comparar</div>';
+  let dias;
+  if(esActual) dias=[...Array(14)].map((_,i)=>addDias(hoy,-(13-i)));
+  else { const n=new Date(+mm.slice(0,4),+mm.slice(5,7),0).getDate(); dias=[...Array(n)].map((_,i)=>mm+'-'+String(i+1).padStart(2,'0')); }
+  const tot=dias.map(d=>suma(ing.filter(x=>x.fecha===d))); const mx=Math.max(...tot,1);
   const bars=dias.map((d,i)=>`<div class="bar ${d===hoy?'hoy':''}" title="${nombreDia(d)}: ${fmt(tot[i])}"><i style="height:${Math.max(2,Math.round(tot[i]/mx*100))}%"></i></div>`).join('');
-  const xl=dias.map(d=>`<span>${+d.slice(8)}</span>`).join('');
+  const xl=dias.map((d,i)=>`<span>${dias.length>16 && i%2 ? '' : +d.slice(8)}</span>`).join('');
   const cuenta={}; ped.forEach(p=>(Array.isArray(p.items)?p.items:[]).forEach(i=>{ const n=i.nombre||'Jean'; cuenta[n]=(cuenta[n]||0)+(Number(i.cantidad)||1); }));
   const top=Object.entries(cuenta).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const porEnviar = S.res.porEnviar||0;
-  return `
-  <div class="card" style="margin-top:16px"><div class="lbl">Ingresos de ${nombreMes(mm)}</div><div class="big">${fmt(ingMes)}</div>${cmp}</div>
-  <div class="grid2" style="margin-top:10px">
-    <div class="card"><div class="lbl">Hoy</div><div class="big sm">${fmt(suma(sHoy))}</div><div class="sub">${sHoy.length} venta${sHoy.length===1?'':'s'}</div></div>
-    <div class="card"><div class="lbl">Ayer</div><div class="big sm">${fmt(suma(sAyer))}</div><div class="sub">${sAyer.length} venta${sAyer.length===1?'':'s'}</div></div>
-    <div class="card"><div class="lbl">Últimos 7 días</div><div class="big sm">${fmt(suma(sSem))}</div><div class="sub">${sSem.length} ventas</div></div>
+  const mejor = (()=>{ let b=null; dias.forEach((d,i)=>{ if(tot[i]>0 && (!b||tot[i]>b.v)) b={d,v:tot[i]}; }); return b; })();
+  const tarjetas = esActual ? `
+    <div class="card"><div class="lbl">Hoy</div><div class="big sm">${fmt(suma(ing.filter(x=>x.fecha===hoy)))}</div><div class="sub">${ing.filter(x=>x.fecha===hoy).length} ventas</div></div>
+    <div class="card"><div class="lbl">Ayer</div><div class="big sm">${fmt(suma(ing.filter(x=>x.fecha===ayer)))}</div><div class="sub">${ing.filter(x=>x.fecha===ayer).length} ventas</div></div>
+    <div class="card"><div class="lbl">Últimos 7 días</div><div class="big sm">${fmt(suma(ing.filter(x=>x.fecha>addDias(hoy,-7)&&x.fecha<=hoy)))}</div><div class="sub">${ing.filter(x=>x.fecha>addDias(hoy,-7)&&x.fecha<=hoy).length} ventas</div></div>
+    <div class="card"><div class="lbl">Ventas del mes</div><div class="big sm">${sMes.length}</div><div class="sub">${sMes.length?('Promedio '+fmt(ingMes/sMes.length)):'—'}</div></div>` : `
     <div class="card"><div class="lbl">Ventas del mes</div><div class="big sm">${sMes.length}</div><div class="sub">${sMes.length?('Promedio '+fmt(ingMes/sMes.length)):'—'}</div></div>
-  </div>
-  <div class="card" style="margin-top:10px"><div class="lbl">Ingresos de los últimos 14 días</div>
+    <div class="card"><div class="lbl">Mejor día</div><div class="big sm">${mejor?fmt(mejor.v):'—'}</div><div class="sub">${mejor?nombreDia(mejor.d):''}</div></div>`;
+  const meses=[...Array(6)].map((_,i)=>{ let m=mm; for(let k=0;k<5-i;k++) m=mesAnt(m); return m; });
+  const hist=meses.map(m=>{ const i=suma(ing.filter(x=>mesDe(x.fecha)===m)), g=suma(gas.filter(x=>mesDe(x.fecha)===m)); return {m,i,g,u:i-g}; });
+  return `${selectorMesRes()}
+  <div class="card"><div class="lbl">Ingresos de ${nombreMes(mm)}</div><div class="big">${fmt(ingMes)}</div>${cmp}</div>
+  <div class="grid2" style="margin-top:10px">${tarjetas}</div>
+  <div class="card" style="margin-top:10px"><div class="lbl">${esActual?'Ingresos de los últimos 14 días':'Ingresos por día'}</div>
     <div class="chart"><div class="grid"></div><span class="ymax">${fmt(mx)}</span><span class="ymid">${fmt(mx/2)}</span><div class="bars">${bars}</div><div class="xl">${xl}</div></div></div>
   <div class="grid2" style="margin-top:10px">
     <div class="card"><div class="lbl">Gastos del mes</div><div class="big sm">${fmt(gastoMes)}</div></div>
     <div class="card"><div class="lbl">Utilidad del mes</div><div class="big sm ${utilidad>=0?'up':'down'}">${fmt(utilidad)}</div></div>
   </div>
   ${porPagar>0?`<div class="card" style="margin-top:10px;border-color:var(--red)"><div class="lbl">Por pagar a proveedores</div><div class="big sm down">${fmt(porPagar)}</div><div class="sub">${pend.length} pendiente${pend.length===1?'':'s'} · se ven en Gastos</div></div>`:''}
-  ${top.length?`<h3 class="sec">Más vendidos del mes</h3><div class="card">${top.map(([n,c])=>`<div class="row" style="cursor:default"><div class="t">${esc(n)}</div><div class="m">${c} uds</div></div>`).join('')}</div>`:''}
-  ${porEnviar?`<div class="card link" style="margin-top:10px" data-act="ir-pedidos"><div class="ic">${ico('caja')}</div><div style="flex:1"><div class="t" style="font-weight:600">${porEnviar} pedido${porEnviar===1?'':'s'} por enviar</div><div class="s" style="font-size:12.5px;color:var(--muted)">Ver los datos de envío</div></div>${ico('chevron','s')}</div>`:''}`;
+  ${top.length?`<h3 class="sec">Más vendidos de ${nombreMes(mm)}</h3><div class="card">${top.map(([n,c])=>`<div class="row" style="cursor:default"><div class="t">${esc(n)}</div><div class="m">${c} uds</div></div>`).join('')}</div>`:''}
+  <h3 class="sec">Últimos 6 meses</h3>
+  <div class="card" style="padding:4px 17px"><div class="row" style="cursor:default;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><div style="flex:1.2">Mes</div><div style="flex:1;text-align:right">Ingresos</div><div style="flex:1;text-align:right">Gastos</div><div style="flex:1;text-align:right">Utilidad</div></div>
+  ${hist.map(h=>`<div class="row" data-act="ir-mes" data-id="${h.m}"><div style="flex:1.2;font-weight:${h.m===mm?700:500}">${nombreMes(h.m).replace(/ de /,' ')}</div><div style="flex:1;text-align:right">${fmt(h.i)}</div><div style="flex:1;text-align:right">${fmt(h.g)}</div><div style="flex:1;text-align:right" class="${h.u>=0?'up':'down'}">${fmt(h.u)}</div></div>`).join('')}</div>
+  ${esActual&&porEnviar?`<div class="card link" style="margin-top:10px" data-act="ir-pedidos"><div class="ic">${ico('caja')}</div><div style="flex:1"><div class="t" style="font-weight:600">${porEnviar} pedido${porEnviar===1?'':'s'} por enviar</div><div class="s" style="font-size:12.5px;color:var(--muted)">Ver los datos de envío</div></div>${ico('chevron','s')}</div>`:''}`;
 }
 function selectorMes(){ return `<div class="mes"><button class="iconbtn" data-act="mes-prev" aria-label="Mes anterior">${ico('izq','s')}</button><b>${nombreMes(S.mes)}</b><button class="iconbtn" data-act="mes-next" aria-label="Mes siguiente" ${S.mes>=mesDe(hoyBogota())?'disabled':''}>${ico('der','s')}</button></div>`; }
 function vistaIngresos(){
@@ -475,8 +483,11 @@ document.addEventListener('click', async e=>{
   const act=el.dataset.act, id=el.dataset.id;
   if(act==='cerrar-bg'){ if(e.target===el) cerrarModal(); return; }
   if(act==='cerrar'){ cerrarModal(); return; }
-  if(act==='tab'){ S.tab=id; if(id==='pedidos'||id==='resumen') S.mes=mesDe(hoyBogota()); cargar(); return; }
+  if(act==='tab'){ S.tab=id; if(id==='pedidos') S.mes=mesDe(hoyBogota()); if(id==='resumen') S.mesRes=mesDe(hoyBogota()); cargar(); return; }
   if(act==='ir-pedidos'){ S.tab='pedidos'; S.filtroPed='por_enviar'; cargar(); return; }
+  if(act==='res-prev'){ S.mesRes=mesAnt(S.mesRes); cargar(); return; }
+  if(act==='res-next'){ if(S.mesRes<mesDe(hoyBogota())){ S.mesRes=mesSig(S.mesRes); cargar(); } return; }
+  if(act==='ir-mes'){ S.mesRes=id; cargar(); window.scrollTo(0,0); return; }
   if(act==='mes-prev'){ S.mes=mesAnt(S.mes); cargar(); return; }
   if(act==='mes-next'){ if(S.mes<mesDe(hoyBogota())){ S.mes=mesSig(S.mes); cargar(); } return; }
   if(act==='filtro-ped'){ S.filtroPed=id; render(); return; }
