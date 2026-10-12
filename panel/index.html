@@ -134,6 +134,8 @@ const SUPA_URL = 'https://rkmhmzlbpbsdihuiofkv.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrbWhtemxicGJzZGlodWlvZmt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0NjcxNjQsImV4cCI6MjEwNzA0MzE2NH0.9FX6_K6Am7budpWgJG4X164lCH93Hl6XVssSqwmQVu8';
 // Modo demo SOLO en localhost con #demo: datos de mentira en memoria para revisar el diseno, nunca toca la base real.
 const DEMO = ['localhost','127.0.0.1'].includes(location.hostname) && location.hash === '#demo';
+// Usuario compartido del panel (la contrasena la define el dueno en Supabase Auth; los datos siguen protegidos por RLS)
+const EMAIL_PANEL = 'panel@novafloe.com';
 const CATEGORIAS = ['Proveedores','Insumos','Envíos','Publicidad','Servicios','Arriendo','Otros'];
 const METODOS = ['Efectivo','Transferencia','Nequi','Tarjeta','Otro'];
 
@@ -413,8 +415,8 @@ function render(){
 function vistaLogin(){
   return `<div class="login"><div class="card"><div class="brand" style="text-align:center;font-size:30px;margin-bottom:4px">Nova <em>Floe</em></div><div class="sub" style="text-align:center;margin-bottom:20px;letter-spacing:.12em;text-transform:uppercase;font-size:11px">Contabilidad · acceso privado</div>
   ${S.login.err?`<div class="err">${esc(S.login.err)}</div>`:''}
-  <form id="fl"><div class="f"><label>Correo</label><input name="email" type="email" autocomplete="username" required/></div>
-  <div class="f"><label>Contraseña</label><input name="pass" type="password" autocomplete="current-password" required/></div>
+  <form id="fl"><input type="hidden" name="email" value="${EMAIL_PANEL}"/>
+  <div class="f"><label>Contraseña</label><input name="pass" type="password" autocomplete="current-password" required autofocus/></div>
   <button class="btn" style="width:100%;margin-top:6px" ${S.login.cargando?'disabled':''}>${S.login.cargando?'Entrando…':'Entrar'}</button></form></div></div>`;
 }
 
@@ -511,7 +513,7 @@ document.addEventListener('submit', async e=>{
   try{
     const {error}=await sb.auth.signInWithPassword({email:f.email.trim(),password:f.pass}); if(error) throw error;
     await iniciar();
-  }catch(err){ S.login={err:/invalid/i.test(err.message||'')?'Correo o contraseña incorrectos.':(err.message||'No se pudo entrar.'),cargando:false}; render(); }
+  }catch(err){ S.login={err:/invalid/i.test(err.message||'')?'Contraseña incorrecta.':(err.message||'No se pudo entrar.'),cargando:false}; render(); }
 });
 
 async function iniciar(){
