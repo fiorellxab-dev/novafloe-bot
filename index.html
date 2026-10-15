@@ -382,12 +382,12 @@ const DB = {
     if(error) throw error;
   },
   async cargarLive(){
-    const {data,error} = await sb.from('nf_bot_estado').select('modo_live,producto_live,orden_live').eq('id',1).single();
+    const {data,error} = await sb.from('nf_bot_estado').select('modo_live,producto_live,orden_live,bot_pausado').eq('id',1).single();
     if(error) throw error;
     return data;
   },
   async guardarLive(patch){
-    const {data,error} = await sb.from('nf_bot_estado').update(patch).eq('id',1).select('modo_live,producto_live,orden_live').single();
+    const {data,error} = await sb.from('nf_bot_estado').update(patch).eq('id',1).select('modo_live,producto_live,orden_live,bot_pausado').single();
     if(error) throw error;
     return data;
   },
@@ -742,6 +742,7 @@ function LiveView({productos}){
 
   if(!estado) return <div className="loading-page"><div className="spinner"/></div>;
   const activo = !!estado.modo_live;
+  const pausado = !!estado.bot_pausado;
   const orden = Array.isArray(estado.orden_live) ? estado.orden_live : [];
   const porId = Object.fromEntries(productos.map(p=>[p.id,p]));
   const enLive = orden.map(id=>porId[id]).filter(Boolean);
@@ -757,6 +758,17 @@ function LiveView({productos}){
 
   return (
     <div style={{padding:'1rem 1.25rem 3rem',maxWidth:720,margin:'0 auto'}}>
+      <div style={{background:pausado?'var(--red-l)':'var(--white)',border:'1.5px solid '+(pausado?'var(--red)':'var(--border)'),borderRadius:'var(--r)',padding:'1rem 1.1rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:12}}>
+        <div>
+          <div style={{fontWeight:600,fontSize:16}}>{pausado?'Bot de WhatsApp PAUSADO':'Bot de WhatsApp activo'}</div>
+          <div style={{fontSize:13,color:'var(--night-3)',marginTop:4}}>
+            {pausado ? 'No responde a las clientas. Reanúdalo cuando todo esté bien.' : 'Si algo falla, páusalo aquí desde cualquier celular. También puedes escribirle "pausar bot" desde el número de la jefa.'}
+          </div>
+        </div>
+        <button className={`btn btn-lg ${pausado?'btn-primary':'btn-danger-soft'}`} disabled={guardando} onClick={()=>{ if(pausado || confirm('¿Pausar el bot? Dejará de responder a las clientas.')) cambiar({bot_pausado:!pausado}); }}>
+          {pausado?'Reanudar':'Pausar'}
+        </button>
+      </div>
       <div style={{background:activo?'var(--red-l)':'var(--white)',border:'1.5px solid '+(activo?'var(--red)':'var(--border)'),borderRadius:'var(--r)',padding:'1rem 1.1rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
         <div>
           <div style={{fontWeight:600,fontSize:16}}>{activo?'Modo Live ACTIVO':'Modo Live apagado'}</div>
