@@ -749,7 +749,11 @@ function PedidosView({productos}){
         });
       }catch(e){}
     }, 8000);
-    return ()=>clearInterval(t);
+    // al volver a la pantalla (desbloquear el celular, cambiar de pestana) se actualiza al instante
+    const alVolver = ()=>{ if(document.visibilityState==='visible') DB.cargarPedidos().then(setPedidos).catch(()=>{}); };
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('online', alVolver);
+    return ()=>{ clearInterval(t); document.removeEventListener('visibilitychange', alVolver); window.removeEventListener('online', alVolver); };
   },[]);
 
   async function cargar(){
