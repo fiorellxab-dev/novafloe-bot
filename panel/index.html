@@ -97,7 +97,9 @@ svg.i.s{width:16px;height:16px}
 .modalbg{position:fixed;inset:0;background:rgba(10,8,12,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--card);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:20px 20px calc(22px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
 @media(min-width:700px){.modalbg{align-items:center}.sheet{border-radius:16px}}
-.sheet h3{margin-bottom:14px;font-size:17px}
+.sheet h3{margin-bottom:14px;font-size:17px;padding-right:44px}
+.sheet{position:relative}
+.sheet .xbtn{position:sticky;top:0;float:right;z-index:5;width:40px;height:40px;margin:-8px -8px 0 8px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
 .f{margin-bottom:12px}.f label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:5px}
 .f input,.f select,.f textarea{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:10px 12px}
 .f input:focus,.f select:focus,.f textarea:focus{outline:2px solid color-mix(in srgb,var(--brand) 40%,transparent);border-color:var(--brand)}
@@ -108,7 +110,7 @@ svg.i.s{width:16px;height:16px}
 .err{background:var(--red-l);color:var(--red);border-radius:9px;padding:9px 12px;font-size:13.5px;margin-bottom:12px}
 .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:90}
 .demo{background:var(--amber-l);color:var(--amber);text-align:center;font-size:12px;font-weight:600;padding:5px;letter-spacing:.04em}
-img.comp{width:100%;border-radius:10px;border:1px solid var(--line)}
+img.comp{width:100%;max-height:68vh;object-fit:contain;border-radius:10px;border:1px solid var(--line);background:var(--bg)}
 .spin{text-align:center;padding:40px;color:var(--muted)}
 .link{display:flex;align-items:center;gap:12px;cursor:pointer}
 .link .ic{width:38px;height:38px;border-radius:10px;background:var(--brand-l);color:var(--brand-d);display:flex;align-items:center;justify-content:center;flex:none}
@@ -155,6 +157,7 @@ const P = {
   izq:'<path d="M15 6l-6 6 6 6"/>',
   der:'<path d="M9 6l6 6-6 6"/>',
   mas:'<path d="M12 5v14M5 12h14"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
   caja:'<path d="M21 8l-9-5-9 5v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v8"/>'
 };
 const ico = (k,s) => `<svg class="i ${s||''}" viewBox="0 0 24 24" aria-hidden="true">${P[k]||''}</svg>`;
@@ -230,7 +233,9 @@ const telFmt = n => { const d=String(n||'').replace(/\D/g,''); return d.length==
 const waLink = n => { const d=String(n||'').replace(/\D/g,''); return d?`<a href="https://wa.me/${d}" target="_blank" rel="noopener" style="color:var(--brand-d);font-weight:600">${telFmt(d)}</a>`:'—'; };
 const ESTADO_PED = { confirmada:['Pagado · faltan datos','conf'], por_enviar:['Por enviar','env'], enviada:['Enviada','ok'] };
 
-const sb = DEMO ? fakeSb() : supabase.createClient(SUPA_URL, SUPA_KEY);
+const sb = DEMO ? fakeSb() : supabase.createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storage: window.localStorage } });
+// al volver a abrir la pagina o la app, renovar la sesion en vez de pedir la clave
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && !DEMO) sb.auth.getSession().then(({data})=>{ if(!data||!data.session){ if(S.user){ S.user=null; render(); } } }).catch(()=>{}); });
 const S = { user:null, tab:'resumen', mes:mesDe(hoyBogota()), mesRes:mesDe(hoyBogota()), cargando:false, error:'', ped:[], filtroPed:'por_enviar', ing:[], gas:[], pend:[], res:null,
   verif:[], con:{ dia:hoyBogota(), desde:'', hasta:'', cuenta:'', ped:[], ing:[], todosRef:[] }, login:{err:'',cargando:false} };
 
@@ -435,14 +440,15 @@ function render(){
 function vistaLogin(){
   return `<div class="login"><div class="card"><div class="brand" style="text-align:center;font-size:30px;margin-bottom:4px">Nova <em>Floe</em></div><div class="sub" style="text-align:center;margin-bottom:20px;letter-spacing:.12em;text-transform:uppercase;font-size:11px">Contabilidad · acceso privado</div>
   ${S.login.err?`<div class="err">${esc(S.login.err)}</div>`:''}
-  <form id="fl"><input type="hidden" name="email" value="${EMAIL_PANEL}"/>
+  <form id="fl" autocomplete="on"><div class="f"><label>Usuario</label><input name="email" type="email" value="${EMAIL_PANEL}" autocomplete="username" readonly style="opacity:.75"/></div>
   <div class="f"><label>Contraseña</label><input name="pass" type="password" autocomplete="current-password" required autofocus/></div>
   <button class="btn" style="width:100%;margin-top:6px" ${S.login.cargando?'disabled':''}>${S.login.cargando?'Entrando…':'Entrar'}</button></form></div></div>`;
 }
 
 /* ---------- modales y formularios ---------- */
 function cerrarModal(){ document.getElementById('modal').innerHTML=''; }
-function abrirModal(html){ document.getElementById('modal').innerHTML=`<div class="modalbg" data-act="cerrar-bg"><div class="sheet">${html}</div></div>`; }
+function abrirModal(html){ document.getElementById('modal').innerHTML=`<div class="modalbg" data-act="cerrar-bg"><div class="sheet"><button type="button" class="xbtn" data-act="cerrar" aria-label="Cerrar">${ico('x')}</button>${html}</div></div>`; }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') cerrarModal(); });
 function campo(c){
   const v=c.def??''; const req=c.req?'required':'';
   if(c.type==='select') return `<div class="f"><label>${c.label}</label><select name="${c.k}">${c.opts.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
