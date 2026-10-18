@@ -160,6 +160,7 @@ const P = {
   der:'<path d="M9 6l6 6-6 6"/>',
   mas:'<path d="M12 5v14M5 12h14"/>',
   x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  refrescar:'<path d="M20 12a8 8 0 11-2.6-5.9M20 4v5h-5"/>',
   caja:'<path d="M21 8l-9-5-9 5v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v8"/>'
 };
 const ico = (k,s) => `<svg class="i ${s||''}" viewBox="0 0 24 24" aria-hidden="true">${P[k]||''}</svg>`;
@@ -440,7 +441,7 @@ function render(){
   const foco = document.activeElement && document.activeElement.id;
   let cuerpo = S.cargando ? '<div class="spin">Cargando…</div>' : S.error ? `<div class="err" style="margin-top:16px">No se pudo cargar: ${esc(S.error)}</div>` : ({resumen:vistaResumen,ingresos:vistaIngresos,pedidos:vistaPedidos,gastos:vistaGastos,conciliar:vistaConciliar})[S.tab]();
   app.innerHTML = `${DEMO?'<div class="demo">MODO DEMO · datos de mentira, no es la base real</div>':''}
-  <div class="top"><div class="wrap"><div class="brand">Nova <em>Floe</em><small>Contabilidad</small>${(S.tab==='pedidos'||S.tab==='resumen'||S.tab==='conciliar')?'<span class="vivo" title="Se actualiza solo cada 10 segundos">● en vivo</span>':''}</div><div class="tools"><button class="iconbtn" data-act="csv" title="Descargar el mes en CSV" aria-label="Descargar CSV">${ico('descargar','s')}</button><button class="iconbtn" data-act="tema" title="Tema claro u oscuro" aria-label="Cambiar tema">${ico('tema','s')}</button><button class="iconbtn" data-act="salir" title="Cerrar sesión" aria-label="Cerrar sesión">${ico('salir','s')}</button></div></div></div>
+  <div class="top"><div class="wrap"><div class="brand">Nova <em>Floe</em><small>Contabilidad</small>${(S.tab==='pedidos'||S.tab==='resumen'||S.tab==='conciliar')?'<span class="vivo" title="Se actualiza solo cada 10 segundos">● en vivo</span>':''}</div><div class="tools"><button class="iconbtn" data-act="recargar" title="Actualizar la página" aria-label="Actualizar">${ico('refrescar','s')}</button><button class="iconbtn" data-act="csv" title="Descargar el mes en CSV" aria-label="Descargar CSV">${ico('descargar','s')}</button><button class="iconbtn" data-act="tema" title="Tema claro u oscuro" aria-label="Cambiar tema">${ico('tema','s')}</button><button class="iconbtn" data-act="salir" title="Cerrar sesión" aria-label="Cerrar sesión">${ico('salir','s')}</button></div></div></div>
   <div class="wrap main">${cuerpo}</div>
   <div class="nav">${tabs.map(([k,l])=>`<button class="${S.tab===k?'on':''}" data-act="tab" data-id="${k}">${ico(k)}<span>${l}</span></button>`).join('')}</div>`;
   if(foco==='con-cuenta'){ const i=document.getElementById('con-cuenta'); if(i){ i.focus(); i.setSelectionRange(i.value.length,i.value.length); } }
@@ -507,6 +508,7 @@ function csv(){
 document.addEventListener('click', async e=>{
   const el=e.target.closest('[data-act]'); if(!el) return;
   const act=el.dataset.act, id=el.dataset.id;
+  if(act==='recargar'){ location.href = location.pathname + '?v=' + Date.now() + location.hash; return; }
   if(act==='cerrar-bg'){ if(e.target===el) cerrarModal(); return; }
   if(act==='cerrar'){ cerrarModal(); return; }
   if(act==='tab'){ S.tab=id; if(id==='pedidos') S.mes=mesDe(hoyBogota()); if(id==='resumen') S.mesRes=mesDe(hoyBogota()); cargar(); return; }
