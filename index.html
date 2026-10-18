@@ -679,12 +679,21 @@ function PedidoCard({pedido, productos}){
   );
 }
 
+function pitidoNuevo(){ try{ const c=new (window.AudioContext||window.webkitAudioContext)(); const o=c.createOscillator(); const g=c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value=880; g.gain.value=0.08; o.start(); setTimeout(()=>{ o.stop(); c.close(); },200); if(navigator.vibrate) navigator.vibrate(120); }catch(e){} }
 function PedidosView({productos}){
   const [pedidos, setPedidos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState('Todos');
 
-  useEffect(()=>{ cargar(); },[]);
+  useEffect(()=>{
+    cargar();
+    // se actualiza solo cada 8 s mientras la pestana esta a la vista; avisa cuando entra un pedido nuevo
+    const t = setInterval(async ()=>{
+      if(document.visibilityState!=='visible') return;
+      try{ const nuevos = await DB.cargarPedidos(); setPedidos(prev=>{ const ids = new Set(prev.map(x=>x.id)); const nu = nuevos.filter(x=>!ids.has(x.id)); if(prev.length && nu.length){ toast('Pedido nuevo: '+(nu[0].cliente_nombre||'sin nombre')); pitidoNuevo(); } return nuevos; }); }catch(e){}
+    }, 8000);
+    return ()=>clearInterval(t);
+  },[]);
 
   async function cargar(){
     setCargando(true);

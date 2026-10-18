@@ -35,6 +35,8 @@ svg.i.s{width:16px;height:16px}
 .top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:calc(12px + env(safe-area-inset-top)) 0 12px}
 .top .wrap{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .brand{font-family:'Playfair Display',serif;font-size:22px;letter-spacing:.01em}.brand em{color:var(--brand);font-style:italic}
+.vivo{color:var(--green);font-size:11px;font-weight:600;margin-left:10px;letter-spacing:.04em;animation:parp 2s infinite}
+@keyframes parp{50%{opacity:.45}}
 .brand small{font-family:'DM Sans',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-left:8px}
 .tools{display:flex;gap:6px}
 .iconbtn{border:1px solid var(--line);background:var(--card);border-radius:9px;height:36px;min-width:36px;padding:0 9px;cursor:pointer;color:var(--ink2);display:inline-flex;align-items:center;justify-content:center}
@@ -243,8 +245,9 @@ function toast(msg){ const t=document.createElement('div'); t.className='toast';
 
 /* ---------- datos ---------- */
 async function q(p){ const r = await p; if(r.error) throw r.error; return r.data||[]; }
-async function cargar(){
-  S.cargando=true; S.error=''; render();
+async function cargar(silencioso){
+  const prevPed = (silencioso && S.tab==='pedidos') ? new Set(S.ped.map(p=>p.id)) : null;
+  if(!silencioso){ S.cargando=true; S.error=''; render(); }
   try{
     if(S.tab==='resumen'){
       const mm=S.mesRes, fin=mesSig(mm)+'-01'; let ini=mm; for(let k=0;k<6;k++) ini=mesAnt(ini); ini+='-01';
@@ -277,9 +280,14 @@ async function cargar(){
       ]);
       S.verif=verif; S.con.ped=ped; S.con.ing=ing; S.con.todosRef=recientes;
     }
-  }catch(e){ S.error = e.message||String(e); }
-  S.cargando=false; render();
+  }catch(e){ if(!silencioso) S.error = e.message||String(e); }
+  S.cargando=false;
+  if(!silencioso || !document.querySelector('.modalbg')) render();
+  if(prevPed){ const nuevos=S.ped.filter(p=>!prevPed.has(p.id)); if(nuevos.length){ toast('Pedido nuevo: '+(nuevos[0].cliente||'sin nombre')+(nuevos[0].resumen?' · '+nuevos[0].resumen:'')); pitido(); } }
 }
+// el panel se actualiza solo (cada 10 s) mientras esta a la vista y no hay una ventana abierta
+function pitido(){ try{ const c=new (window.AudioContext||window.webkitAudioContext)(); const o=c.createOscillator(); const g=c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value=880; g.gain.value=0.08; o.start(); setTimeout(()=>{ o.stop(); c.close(); },200); if(navigator.vibrate) navigator.vibrate(120); }catch(e){} }
+setInterval(()=>{ if(S.user && document.visibilityState==='visible' && !S.cargando && !document.querySelector('.modalbg') && ['pedidos','resumen','conciliar','ingresos'].includes(S.tab)) cargar(true); }, 10000);
 
 /* ---------- vistas ---------- */
 function selectorMesRes(){ return `<div class="mes"><button class="iconbtn" data-act="res-prev" aria-label="Mes anterior">${ico('izq','s')}</button><b>${nombreMes(S.mesRes)}</b><button class="iconbtn" data-act="res-next" aria-label="Mes siguiente" ${S.mesRes>=mesDe(hoyBogota())?'disabled':''}>${ico('der','s')}</button></div>`; }
@@ -432,7 +440,7 @@ function render(){
   const foco = document.activeElement && document.activeElement.id;
   let cuerpo = S.cargando ? '<div class="spin">Cargando…</div>' : S.error ? `<div class="err" style="margin-top:16px">No se pudo cargar: ${esc(S.error)}</div>` : ({resumen:vistaResumen,ingresos:vistaIngresos,pedidos:vistaPedidos,gastos:vistaGastos,conciliar:vistaConciliar})[S.tab]();
   app.innerHTML = `${DEMO?'<div class="demo">MODO DEMO · datos de mentira, no es la base real</div>':''}
-  <div class="top"><div class="wrap"><div class="brand">Nova <em>Floe</em><small>Contabilidad</small></div><div class="tools"><button class="iconbtn" data-act="csv" title="Descargar el mes en CSV" aria-label="Descargar CSV">${ico('descargar','s')}</button><button class="iconbtn" data-act="tema" title="Tema claro u oscuro" aria-label="Cambiar tema">${ico('tema','s')}</button><button class="iconbtn" data-act="salir" title="Cerrar sesión" aria-label="Cerrar sesión">${ico('salir','s')}</button></div></div></div>
+  <div class="top"><div class="wrap"><div class="brand">Nova <em>Floe</em><small>Contabilidad</small>${(S.tab==='pedidos'||S.tab==='resumen'||S.tab==='conciliar')?'<span class="vivo" title="Se actualiza solo cada 10 segundos">● en vivo</span>':''}</div><div class="tools"><button class="iconbtn" data-act="csv" title="Descargar el mes en CSV" aria-label="Descargar CSV">${ico('descargar','s')}</button><button class="iconbtn" data-act="tema" title="Tema claro u oscuro" aria-label="Cambiar tema">${ico('tema','s')}</button><button class="iconbtn" data-act="salir" title="Cerrar sesión" aria-label="Cerrar sesión">${ico('salir','s')}</button></div></div></div>
   <div class="wrap main">${cuerpo}</div>
   <div class="nav">${tabs.map(([k,l])=>`<button class="${S.tab===k?'on':''}" data-act="tab" data-id="${k}">${ico(k)}<span>${l}</span></button>`).join('')}</div>`;
   if(foco==='con-cuenta'){ const i=document.getElementById('con-cuenta'); if(i){ i.focus(); i.setSelectionRange(i.value.length,i.value.length); } }
