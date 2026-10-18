@@ -314,6 +314,31 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .tab.on{color:var(--blush-dd);border-bottom-color:var(--blush-d);}
 
 /* PEDIDOS */
+.pk-chips{display:flex;gap:8px;flex-wrap:wrap;padding:1rem 1.25rem 0}
+.pk-chip{border:2px solid var(--border);background:var(--white);border-radius:999px;padding:12px 18px;font-size:17px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--night-2)}
+.pk-chip.on{background:var(--blush-d);border-color:var(--blush-d);color:#fff}
+.pk-nota{margin:12px 1.25rem 0;padding:12px 14px;border-radius:12px;background:#FBF0D8;color:#7a5410;font-size:16px;line-height:1.4}
+.pk-card{background:var(--white);border:2px solid var(--border);border-radius:16px;padding:18px 18px 16px}
+.pk-card.nuevo{border-color:#3D7A5A;box-shadow:0 0 0 4px rgba(61,122,90,.15)}
+.pk-card.hecho{opacity:.62}
+.pk-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.pk-nombre{font-size:23px;font-weight:700;line-height:1.2}
+.pk-fecha{font-size:16px;color:var(--night-3)}
+.pk-nuevo{display:inline-block;background:#3D7A5A;color:#fff;font-size:13px;font-weight:700;border-radius:8px;padding:3px 9px;margin-left:8px;vertical-align:middle}
+.pk-items{margin:14px 0 6px;display:grid;gap:8px}
+.pk-item{font-size:21px;line-height:1.3;padding:10px 14px;background:var(--blush-l);border-radius:12px}
+.pk-item b{font-weight:800}
+.pk-total{font-size:17px;color:var(--night-3);margin:6px 0 12px}
+.pk-envio{background:#F7F3F5;border-radius:12px;padding:12px 14px;display:grid;gap:7px}
+.pk-envio .t{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--night-3)}
+.pk-envio .f{display:flex;gap:8px;font-size:19px;line-height:1.3;flex-wrap:nowrap}
+.pk-envio .f span:first-child{color:var(--night-3);min-width:92px;flex:none}
+.pk-envio .f span:last-child{font-weight:700;word-break:break-word}
+.pk-falta{background:#FBF0D8;color:#7a5410;border-radius:12px;padding:12px 14px;font-size:18px}
+.pk-acciones{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.pk-btn{border:none;border-radius:14px;padding:16px 20px;font-size:19px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;min-width:150px}
+.pk-btn.ok{background:#3D7A5A;color:#fff}
+.pk-btn.sec{background:var(--white);border:2px solid var(--border);color:var(--night-2)}
 .pedidos-list{display:flex;flex-direction:column;gap:12px;padding:1rem 1.25rem 2rem;}
 .pedido-card{
   background:var(--white);border:1px solid var(--border);border-radius:var(--r);
@@ -373,7 +398,7 @@ const DB = {
     return data;
   },
   async cargarPedidos(){
-    const {data,error} = await sb.from('nf_pedidos').select('*').order('created_at',{ascending:false});
+    const {data,error} = await sb.from('nf_pedidos').select('*').gte('created_at', new Date(Date.now()-14*864e5).toISOString()).order('created_at',{ascending:false});
     if(error) throw error;
     return data||[];
   },
@@ -646,35 +671,58 @@ const ESTADO_LABEL = {
   cancelado:'Cancelado',
 };
 
-function PedidoCard({pedido, productos}){
-  const prod = productos.find(p=>p.id===pedido.producto_id);
-  const fecha = pedido.created_at ? new Date(pedido.created_at).toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'}) : '';
+function fechaAmable(iso){
+  if(!iso) return '';
+  const d = new Date(iso), hoy = new Date(), ayer = new Date(hoy.getTime()-864e5);
+  const hora = d.toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'});
+  if(d.toDateString()===hoy.toDateString()) return 'Hoy, '+hora;
+  if(d.toDateString()===ayer.toDateString()) return 'Ayer, '+hora;
+  return d.toLocaleDateString('es-CO',{day:'numeric',month:'short'})+', '+hora;
+}
+function agruparPedidos(rows){
+  const g = {};
+  rows.forEach(r=>{ const k = r.grupo_id || r.id; (g[k] = g[k] || []).push(r); });
+  return Object.values(g).map(fs=>({ id: fs[0].grupo_id || fs[0].id, filas: fs, base: fs[0] }));
+}
+function PedidoEmpaque({g, productos, onMarcar}){
+  const b = g.base;
+  const nombre = b.envio_nombre || b.cliente_nombre || 'Cliente sin nombre';
+  const esperando = b.estado==='pendiente_confirmacion_humana';
+  const empacado = g.filas.every(f=>f.empacado);
+  const total = g.filas.reduce((s,f)=>s+(Number(f.precio_total)||0),0);
+  const nuevo = !empacado && !esperando && (Date.now() - new Date(b.updated_at||b.created_at).getTime() < 120000);
+  async function copiar(){
+    const t = `Nombre: ${b.envio_nombre||''}\nCédula: ${b.envio_cedula||''}\nTeléfono: ${b.envio_telefono||''}\nDirección: ${b.envio_direccion||''}\nCiudad: ${b.envio_ciudad||''}`;
+    try{ await navigator.clipboard.writeText(t); toast('Datos copiados'); }catch(e){ toast('No se pudo copiar'); }
+  }
   return (
-    <div className="pedido-card">
-      <div className="pedido-top">
-        <div>
-          <div className="pedido-cliente">{pedido.cliente_nombre || 'Sin nombre'}</div>
-          <div className="pedido-tel">{pedido.cliente_telefono} · {fecha}</div>
-        </div>
-        <span className={`estado-badge ${pedido.estado}`}>{ESTADO_LABEL[pedido.estado] || pedido.estado}</span>
+    <div className={`pk-card ${nuevo?'nuevo':''} ${empacado?'hecho':''}`}>
+      <div className="pk-top">
+        <div className="pk-nombre">{nombre}{nuevo && <span className="pk-nuevo">NUEVO</span>}</div>
+        <div className="pk-fecha">{fechaAmable(b.updated_at||b.created_at)}</div>
       </div>
-      <div className="pedido-detalle">
-        <b>{prod ? prod.nombre : (pedido.producto_id || 'Producto no identificado')}</b>
-        {pedido.talla && <> · Talla {pedido.talla}</>}
-        {pedido.cantidad && <> · Cant. {pedido.cantidad}</>}
-        {pedido.precio_total && <> · {fmt(pedido.precio_total)}</>}
+      <div className="pk-items">
+        {g.filas.map(f=>{
+          const pr = productos.find(x=>x.id===f.producto_id);
+          return <div className="pk-item" key={f.id}><b>{pr ? pr.nombre.trim() : 'Jean (ya no está en el inventario)'}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}</div>;
+        })}
       </div>
-      {pedido.comprobante_url && (
-        <a className="pedido-comprobante" href={pedido.comprobante_url} target="_blank" rel="noreferrer">
-          <img src={pedido.comprobante_url} alt="comprobante"/> Ver comprobante
-        </a>
-      )}
-      {(pedido.envio_nombre || pedido.envio_direccion) && (
-        <div className="pedido-envio">
-          <b>Envío:</b> {pedido.envio_nombre} · CC {pedido.envio_cedula} · {pedido.envio_telefono}<br/>
-          {pedido.envio_direccion}, {pedido.envio_ciudad}
+      <div className="pk-total">Total del pedido: {fmt(total)}</div>
+      {b.envio_direccion ? (
+        <div className="pk-envio">
+          <div className="t">Datos de envío</div>
+          <div className="f"><span>Nombre</span><span>{b.envio_nombre}</span></div>
+          <div className="f"><span>Cédula</span><span>{b.envio_cedula}</span></div>
+          <div className="f"><span>Teléfono</span><span>{b.envio_telefono}</span></div>
+          <div className="f"><span>Dirección</span><span>{b.envio_direccion}</span></div>
+          <div className="f"><span>Ciudad</span><span>{b.envio_ciudad}</span></div>
         </div>
-      )}
+      ) : <div className="pk-falta">Todavía no mandó los datos de envío.</div>}
+      <div className="pk-acciones">
+        {b.envio_direccion && <button className="pk-btn sec" onClick={copiar}>Copiar datos de envío</button>}
+        {!esperando && !empacado && <button className="pk-btn ok" onClick={()=>onMarcar(g,true)}>Ya empaqué este pedido</button>}
+        {empacado && <button className="pk-btn sec" onClick={()=>onMarcar(g,false)}>Deshacer</button>}
+      </div>
     </div>
   );
 }
@@ -683,14 +731,23 @@ function pitidoNuevo(){ try{ const c=new (window.AudioContext||window.webkitAudi
 function PedidosView({productos}){
   const [pedidos, setPedidos] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [filtro, setFiltro] = useState('Todos');
+  const [filtro, setFiltro] = useState('listo');
 
   useEffect(()=>{
     cargar();
     // se actualiza solo cada 8 s mientras la pestana esta a la vista; avisa cuando entra un pedido nuevo
     const t = setInterval(async ()=>{
       if(document.visibilityState!=='visible') return;
-      try{ const nuevos = await DB.cargarPedidos(); setPedidos(prev=>{ const ids = new Set(prev.map(x=>x.id)); const nu = nuevos.filter(x=>!ids.has(x.id)); if(prev.length && nu.length){ toast('Pedido nuevo: '+(nu[0].cliente_nombre||'sin nombre')); pitidoNuevo(); } return nuevos; }); }catch(e){}
+      try{
+        const nuevos = await DB.cargarPedidos();
+        setPedidos(prev=>{
+          const ids = new Set(prev.map(x=>x.id));
+          const nu = nuevos.filter(x=>!ids.has(x.id) && x.estado==='listo_para_enviar');
+          const cambio = prev.length && nuevos.some(x=>x.estado==='listo_para_enviar' && !x.empacado && prev.some(y=>y.id===x.id && y.estado!=='listo_para_enviar'));
+          if(prev.length && (nu.length || cambio)){ toast('Pedido nuevo para empacar'); pitidoNuevo(); }
+          return nuevos;
+        });
+      }catch(e){}
     }, 8000);
     return ()=>clearInterval(t);
   },[]);
@@ -701,25 +758,35 @@ function PedidosView({productos}){
     catch(e){ toast('Error: '+e.message); }
     setCargando(false);
   }
+  async function marcar(g, valor){
+    const ids = g.filas.map(f=>f.id);
+    const {error} = await sb.from('nf_pedidos').update({empacado:valor}).in('id',ids);
+    if(error){ toast('No se pudo guardar: '+error.message); return; }
+    setPedidos(prev=>prev.map(p=>ids.includes(p.id)?{...p,empacado:valor}:p));
+    toast(valor?'Listo, pedido empacado':'Pedido devuelto a la lista');
+  }
 
-  const estados = ['Todos', ...Object.keys(ESTADO_LABEL).filter(e=>pedidos.some(p=>p.estado===e))];
-  const filtrados = filtro==='Todos' ? pedidos : pedidos.filter(p=>p.estado===filtro);
+  const listos = agruparPedidos(pedidos.filter(p=>p.estado==='listo_para_enviar'));
+  const porEmpacar = listos.filter(g=>!g.filas.every(f=>f.empacado));
+  const empacados = listos.filter(g=>g.filas.every(f=>f.empacado));
+  const esperando = agruparPedidos(pedidos.filter(p=>p.estado==='pendiente_confirmacion_humana'));
+  const lista = filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : empacados;
+  const vacio = {listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.', esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.'}[filtro];
 
   return (
     <div>
-      <div className="toolbar">
-        {estados.map(e=>(
-          <button key={e} className={`chip ${filtro===e?'on':''}`} onClick={()=>setFiltro(e)}>
-            {e==='Todos' ? 'Todos' : (ESTADO_LABEL[e]||e)}
-          </button>
-        ))}
+      <div className="pk-chips">
+        <button className={`pk-chip ${filtro==='listo'?'on':''}`} onClick={()=>setFiltro('listo')}>Listo para enviar ({porEmpacar.length})</button>
+        <button className={`pk-chip ${filtro==='esperando'?'on':''}`} onClick={()=>setFiltro('esperando')}>Esperando confirmación ({esperando.length})</button>
+        <button className={`pk-chip ${filtro==='hechos'?'on':''}`} onClick={()=>setFiltro('hechos')}>Ya empacados ({empacados.length})</button>
       </div>
+      {filtro==='esperando' && <div className="pk-nota">Estos pedidos todavía <b>no se deben empacar</b>: el pago se está revisando. Cuando se confirme, pasan solos a "Listo para enviar".</div>}
       <div className="pedidos-list">
         {cargando
           ? <div className="loading-page"><div className="spinner"/></div>
-          : filtrados.length===0
-            ? <div className="empty"><p>Aún no hay pedidos{filtro!=='Todos' ? ' en este estado' : ''}.</p></div>
-            : filtrados.map(p=><PedidoCard key={p.id} pedido={p} productos={productos}/>)
+          : lista.length===0
+            ? <div className="empty"><p style={{fontSize:18}}>{vacio}</p></div>
+            : lista.map(g=><PedidoEmpaque key={g.id} g={g} productos={productos} onMarcar={marcar}/>)
         }
       </div>
     </div>
