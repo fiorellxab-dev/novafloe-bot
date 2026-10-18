@@ -180,9 +180,9 @@ function fakeSb(){
     ],
     pedidos:[
       {id:'p1',idempotency_key:'nf-p1',created_at:hoy+'T15:10:00-05:00',fecha:hoy,cliente:'Ana Sofía Gómez',whatsapp:'573001234567',cedula:'1020304050',telefono:'3001234567',ciudad:'Montería',direccion:'Calle 1 #2-3, barrio Centro',items:[{nombre:'Jean palazzo',talla:'8',cantidad:1,precio:75000}],resumen:'Jean palazzo T8',valor:75000,estado:'por_enviar',comprobante_path:'demo.png',monto_comprobante:75000,banco_comprobante:'Nequi',referencia_comprobante:'M11111111'},
-      {id:'p2',idempotency_key:'nf-p2',created_at:hoy+'T16:40:00-05:00',fecha:hoy,cliente:'Laura Díaz',cedula:'',telefono:'',ciudad:'',direccion:'',items:[{nombre:'Jean ajustable claro',talla:'10',cantidad:1,precio:75000},{nombre:'Jean palazzo',talla:'8',cantidad:1,precio:75000}],resumen:'Jean ajustable claro T10, Jean palazzo T8',valor:150000,estado:'confirmada',comprobante_path:'demo.png',monto_comprobante:100000,banco_comprobante:'Bancolombia',referencia_comprobante:'B22222222'},
+      {id:'p2',idempotency_key:'nf-p2',created_at:hoy+'T16:40:00-05:00',fecha:hoy,cliente:'Laura Díaz',cedula:'',telefono:'',ciudad:'',direccion:'',items:[{nombre:'Jean ajustable claro',talla:'10',cantidad:1,precio:75000},{nombre:'Jean palazzo',talla:'8',cantidad:1,precio:75000}],resumen:'Jean ajustable claro T10, Jean palazzo T8',valor:150000,estado:'confirmada',verificacion:'pendiente',comprobante_path:'demo.png',monto_comprobante:100000,banco_comprobante:'Bancolombia',referencia_comprobante:'B22222222'},
       {id:'p3',idempotency_key:'nf-p3',created_at:dia(1)+'T12:00:00-05:00',fecha:dia(1),cliente:'Camila Ruiz',cedula:'99887766',telefono:'3105550000',ciudad:'Cali',direccion:'Carrera 5 #10-20',items:[{nombre:'Jean ajustable',talla:'6',cantidad:1,precio:75000}],resumen:'Jean ajustable T6',valor:75000,estado:'enviada',comprobante_path:'demo.png',monto_comprobante:75000,banco_comprobante:'Nequi',referencia_comprobante:'M33333333'},
-      {id:'p4',idempotency_key:'nf-p4',created_at:hoy+'T17:05:00-05:00',fecha:hoy,cliente:'Paula Mora',cedula:'',telefono:'',ciudad:'',direccion:'',items:[{nombre:'Jean ajustable',talla:'6',cantidad:1,precio:75000}],resumen:'Jean ajustable T6',valor:75000,estado:'confirmada',comprobante_path:'demo.png',monto_comprobante:75000,banco_comprobante:'Nequi',referencia_comprobante:'M44444444'},
+      {id:'p4',idempotency_key:'nf-p4',created_at:hoy+'T17:05:00-05:00',fecha:hoy,cliente:'Paula Mora',cedula:'',telefono:'',ciudad:'',direccion:'',items:[{nombre:'Jean ajustable',talla:'6',cantidad:1,precio:75000}],resumen:'Jean ajustable T6',valor:75000,estado:'confirmada',verificacion:'pendiente',comprobante_path:'demo.png',monto_comprobante:75000,banco_comprobante:'Nequi',referencia_comprobante:'M44444444'},
       {id:'p5',idempotency_key:'nf-p5',created_at:hoy+'T17:30:00-05:00',fecha:hoy,cliente:'Sara Gil',cedula:'',telefono:'',ciudad:'',direccion:'',items:[{nombre:'Jean palazzo',talla:'10',cantidad:1,precio:75000}],resumen:'Jean palazzo T10',valor:75000,estado:'confirmada',comprobante_path:'demo.png',monto_comprobante:75000,banco_comprobante:'Nequi',referencia_comprobante:'M44444444'}
     ],
     gastos_dueno:[]
@@ -192,7 +192,7 @@ function fakeSb(){
     let op = 'select', payload = null, ord = null, single = false; const filt = [];
     const api = {
       select(){ return api; }, insert(p){ op='insert'; payload=p; return api; }, update(p){ op='update'; payload=p; return api; }, delete(){ op='delete'; return api; },
-      gte(c,v){ filt.push(r=>r[c]>=v); return api; }, lt(c,v){ filt.push(r=>r[c]<v); return api; }, eq(c,v){ filt.push(r=>r[c]===v); return api; },
+      gte(c,v){ filt.push(r=>r[c]>=v); return api; }, lt(c,v){ filt.push(r=>r[c]<v); return api; }, eq(c,v){ filt.push(r=>r[c]===v); return api; }, neq(c,v){ filt.push(r=>r[c]!==v); return api; },
       order(c,o){ ord=[c,o&&o.ascending===false?-1:1]; return api; }, limit(){ return api; }, single(){ single=true; return api; },
       then(res){
         const m = db[t].filter(r=>filt.every(f=>f(r))); let out;
@@ -232,7 +232,7 @@ const ESTADO_PED = { confirmada:['Pagado · faltan datos','conf'], por_enviar:['
 
 const sb = DEMO ? fakeSb() : supabase.createClient(SUPA_URL, SUPA_KEY);
 const S = { user:null, tab:'resumen', mes:mesDe(hoyBogota()), mesRes:mesDe(hoyBogota()), cargando:false, error:'', ped:[], filtroPed:'por_enviar', ing:[], gas:[], pend:[], res:null,
-  con:{ dia:hoyBogota(), desde:'', hasta:'', cuenta:'', ped:[], ing:[], todosRef:[] }, login:{err:'',cargando:false} };
+  verif:[], con:{ dia:hoyBogota(), desde:'', hasta:'', cuenta:'', ped:[], ing:[], todosRef:[] }, login:{err:'',cargando:false} };
 
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
 
@@ -243,14 +243,15 @@ async function cargar(){
   try{
     if(S.tab==='resumen'){
       const mm=S.mesRes, fin=mesSig(mm)+'-01'; let ini=mm; for(let k=0;k<6;k++) ini=mesAnt(ini); ini+='-01';
-      const [ing,gas,pend,ped,porEnv] = await Promise.all([
+      const [ing,gas,pend,ped,porEnv,porVer] = await Promise.all([
         q(sb.from('ingresos').select('*').gte('fecha',ini).lt('fecha',fin).order('fecha',{ascending:false})),
         q(sb.from('gastos').select('*').gte('fecha',ini).lt('fecha',fin)),
         q(sb.from('gastos').select('*').eq('estado','pendiente')),
         q(sb.from('pedidos').select('*').gte('fecha',mm+'-01').lt('fecha',fin)),
-        q(sb.from('pedidos').select('id').eq('estado','por_enviar'))
+        q(sb.from('pedidos').select('id').eq('estado','por_enviar')),
+        q(sb.from('pedidos').select('id').eq('verificacion','pendiente'))
       ]);
-      S.res={ing,gas,pend,ped,porEnviar:porEnv.length};
+      S.res={ing,gas,pend,ped,porEnviar:porEnv.length,porVerificar:porVer.length};
     } else if(S.tab==='ingresos'){
       S.ing = await q(sb.from('ingresos').select('*').gte('fecha',S.mes+'-01').lt('fecha',mesSig(S.mes)+'-01').order('fecha',{ascending:false}).order('created_at',{ascending:false}));
     } else if(S.tab==='pedidos'){
@@ -263,12 +264,13 @@ async function cargar(){
       S.gas=gas; S.pend=pend;
     } else if(S.tab==='conciliar'){
       const d=S.con.dia;
-      const [ped,ing,recientes] = await Promise.all([
+      const [ped,ing,recientes,verif] = await Promise.all([
         q(sb.from('pedidos').select('*').eq('fecha',d).order('created_at',{ascending:true})),
         q(sb.from('ingresos').select('*').eq('fecha',d).order('created_at',{ascending:true})),
-        q(sb.from('pedidos').select('id,referencia_comprobante,cliente,created_at,fecha').gte('fecha',addDias(d,-60)).order('created_at',{ascending:true}))
+        q(sb.from('pedidos').select('id,referencia_comprobante,cliente,created_at,fecha').gte('fecha',addDias(d,-60)).order('created_at',{ascending:true})),
+        q(sb.from('pedidos').select('*').neq('verificacion','ok').order('created_at',{ascending:true}))
       ]);
-      S.con.ped=ped; S.con.ing=ing; S.con.todosRef=recientes;
+      S.verif=verif; S.con.ped=ped; S.con.ing=ing; S.con.todosRef=recientes;
     }
   }catch(e){ S.error = e.message||String(e); }
   S.cargando=false; render();
@@ -318,6 +320,7 @@ function vistaResumen(){
   <h3 class="sec">Últimos 6 meses</h3>
   <div class="card" style="padding:4px 17px"><div class="row" style="cursor:default;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><div style="flex:1.2">Mes</div><div style="flex:1;text-align:right">Ingresos</div><div style="flex:1;text-align:right">Gastos</div><div style="flex:1;text-align:right">Utilidad</div></div>
   ${hist.map(h=>`<div class="row" data-act="ir-mes" data-id="${h.m}"><div style="flex:1.2;font-weight:${h.m===mm?700:500}">${nombreMes(h.m).replace(/ de /,' ')}</div><div style="flex:1;text-align:right">${fmt(h.i)}</div><div style="flex:1;text-align:right">${fmt(h.g)}</div><div style="flex:1;text-align:right" class="${h.u>=0?'up':'down'}">${fmt(h.u)}</div></div>`).join('')}</div>
+  ${(S.res.porVerificar||0)?`<div class="card link" style="margin-top:10px" data-act="ir-conciliar"><div class="ic">${ico('conciliar')}</div><div style="flex:1"><div class="t" style="font-weight:600">${S.res.porVerificar} pago${S.res.porVerificar===1?'':'s'} por verificar</div><div class="s" style="font-size:12.5px;color:var(--muted)">El bot los dio por recibidos; compáralos con tu cuenta</div></div>${ico('chevron','s')}</div>`:''}
   ${esActual&&porEnviar?`<div class="card link" style="margin-top:10px" data-act="ir-pedidos"><div class="ic">${ico('caja')}</div><div style="flex:1"><div class="t" style="font-weight:600">${porEnviar} pedido${porEnviar===1?'':'s'} por enviar</div><div class="s" style="font-size:12.5px;color:var(--muted)">Ver los datos de envío</div></div>${ico('chevron','s')}</div>`:''}`;
 }
 function selectorMes(){ return `<div class="mes"><button class="iconbtn" data-act="mes-prev" aria-label="Mes anterior">${ico('izq','s')}</button><b>${nombreMes(S.mes)}</b><button class="iconbtn" data-act="mes-next" aria-label="Mes siguiente" ${S.mes>=mesDe(hoyBogota())?'disabled':''}>${ico('der','s')}</button></div>`; }
@@ -333,10 +336,10 @@ function vistaPedidos(){
   const lista = S.filtroPed==='todos'?S.ped:S.ped.filter(p=>p.estado===S.filtroPed);
   const chips=[['por_enviar','Por enviar'],['confirmada','Faltan datos'],['enviada','Enviadas'],['todos','Todos']].map(([k,l])=>`<button class="chip ${S.filtroPed===k?'on':''}" data-act="filtro-ped" data-id="${k}">${l} (${cuentas[k]||0})</button>`).join('');
   return `<div class="chips" style="margin-top:16px">${chips}</div>${lista.length?lista.map(p=>{ const [et,cl]=ESTADO_PED[p.estado]||[p.estado,'conf']; return `<div class="card" style="margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><div class="t" style="font-weight:600">${esc(p.cliente||'Sin nombre')}</div><div class="s" style="font-size:12.5px;color:var(--muted)">${new Date(p.created_at).toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'})}${p.whatsapp?' · '+waLink(p.whatsapp):''}</div></div><span class="pill ${cl}">${et}</span></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><div class="t" style="font-weight:600">${esc(p.cliente||'Sin nombre')}</div><div class="s" style="font-size:12.5px;color:var(--muted)">${new Date(p.created_at).toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'})}${p.whatsapp?' · '+waLink(p.whatsapp):''}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${p.verificacion==='pendiente'?'<span class="pill conf">Por verificar</span>':p.verificacion==='problema'?'<span class="pill pend">Con problema</span>':''}<span class="pill ${cl}">${et}</span></span></div>
     <div style="margin:9px 0 4px;font-size:14px">${esc(p.resumen||'')}</div><div style="font-weight:600">${fmt(p.valor)}</div>
     ${p.direccion?`<div class="s" style="font-size:13px;color:var(--ink2);margin-top:8px;line-height:1.55">${esc(p.direccion)}, ${esc(p.ciudad)}<br>${esc(p.cliente)} · CC ${esc(p.cedula)} · Tel ${esc(p.telefono)}</div>`:'<div class="s" style="font-size:12.5px;color:var(--muted);margin-top:8px">Aún no ha enviado sus datos de envío.</div>'}
-    <div class="acts">${p.comprobante_path?`<button class="btn ghost sm" data-act="ver-comp" data-id="${p.id}">${ico('recibo','s')} Comprobante</button>`:''}${p.direccion?`<button class="btn ghost sm" data-act="copiar-envio" data-id="${p.id}">${ico('copiar','s')} Copiar datos</button>`:''}${p.estado==='por_enviar'?`<button class="btn green sm" data-act="estado-ped" data-id="${p.id}" data-v="enviada">Marcar enviada</button>`:''}${p.estado==='enviada'?`<button class="btn ghost sm" data-act="estado-ped" data-id="${p.id}" data-v="por_enviar">Volver a "por enviar"</button>`:''}</div></div>`; }).join(''):'<div class="empty">No hay pedidos en esta lista.</div>'}`;
+    <div class="acts">${p.comprobante_path?`<button class="btn ghost sm" data-act="ver-comp" data-id="${p.id}">${ico('recibo','s')} Comprobante</button>`:''}${p.direccion?`<button class="btn ghost sm" data-act="copiar-envio" data-id="${p.id}">${ico('copiar','s')} Copiar datos</button>`:''}${p.verificacion&&p.verificacion!=='ok'?`<button class="btn green sm" data-act="verif-ok" data-id="${p.id}">Marcar verificado</button>`:''}${p.estado==='por_enviar'?`<button class="btn green sm" data-act="estado-ped" data-id="${p.id}" data-v="enviada">Marcar enviada</button>`:''}${p.estado==='enviada'?`<button class="btn ghost sm" data-act="estado-ped" data-id="${p.id}" data-v="por_enviar">Volver a "por enviar"</button>`:''}</div></div>`; }).join(''):'<div class="empty">No hay pedidos en esta lista.</div>'}`;
 }
 function filaGasto(x){ return `<div class="row" data-act="ver-gas" data-id="${x.id}"><div><div class="t">${esc(x.concepto)} ${x.estado==='pendiente'?'<span class="pill pend">Pendiente</span>':''}</div><div class="s">${[x.proveedor,x.categoria,x.fecha].filter(Boolean).map(esc).join(' · ')}</div></div><div class="m">${fmt(x.monto)}</div></div>`; }
 function vistaGastos(){
@@ -377,6 +380,15 @@ function analizarConciliacion(){
   return {ped,ing,anoms,totRegistrado,totComp,totPedidos};
 }
 function enviaVentana(p){ return enVentana(p.created_at); }
+
+function bloqueVerificar(){
+  const v=S.verif||[]; if(!v.length) return '';
+  const cuadra=p=>p.monto_comprobante!=null && Math.round(Number(p.monto_comprobante))===Math.round(Number(p.valor));
+  return `<h3 class="sec" style="margin-top:6px">Pagos por verificar (${v.length})</h3>
+  <div class="card" style="padding:4px 17px">${v.map(p=>`<div class="anom" style="cursor:default;flex-wrap:wrap"><span class="dot ${p.verificacion==='problema'?'r':'a'}"></span><div style="flex:1;min-width:200px"><div class="t" style="font-weight:600;font-size:14.5px">${esc(p.cliente||'Sin nombre')} · ${fmt(p.valor)} <span class="s" style="font-weight:400;color:var(--muted);font-size:12.5px">${new Date(p.created_at).toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'})}</span></div><div class="s" style="font-size:13px;color:var(--ink2);margin-top:2px">${p.verificacion==='problema'?'<b class="down">Marcado con problema.</b> ':''}Comprobante: ${p.monto_comprobante!=null?fmt(p.monto_comprobante):'sin monto'}${p.banco_comprobante?' · '+esc(p.banco_comprobante):''}${p.referencia_comprobante?' · ref. '+esc(p.referencia_comprobante):''}${cuadra(p)?'':' <b class="down">(no coincide)</b>'}${p.whatsapp?' · '+waLink(p.whatsapp):''}</div></div>
+    <div class="acts" style="margin:0;width:100%">${p.comprobante_path?`<button class="btn ghost sm" data-act="ver-comp-ver" data-id="${p.id}">${ico('recibo','s')} Comprobante</button>`:''}<button class="btn green sm" data-act="verif-ok" data-id="${p.id}">Verificado</button><button class="btn red sm" data-act="verif-problema" data-id="${p.id}">Hay un problema</button></div></div>`).join('')}</div>
+  <div class="acts" style="margin:10px 0 22px"><button class="btn ghost sm" data-act="verif-todos">Marcar todos como verificados</button></div>`;
+}
 function vistaConciliar(){
   const a=analizarConciliacion(); const c=S.con; const hoy=hoyBogota();
   const cuenta = c.cuenta===''?null:Number(String(c.cuenta).replace(/[^\d.-]/g,''));
@@ -390,7 +402,7 @@ function vistaConciliar(){
     difBloque+=`<div class="dif ${difComp===0?'ok':'neu'}"><span>Cuenta real frente a la suma de comprobantes</span><span>${difComp===0?'Cuadra':(difComp>0?'Sobran ':'Faltan ')+fmt(Math.abs(difComp))}</span></div>`;
   } else difBloque='<div class="dif neu"><span>Escribe el total que ves en tu cuenta para comparar</span></div>';
   const pasados=a.ped.length-new Set(a.anoms.map(x=>x.p.id)).size;
-  return `<div class="chips" style="margin-top:16px">
+  return `${bloqueVerificar()}<div class="chips" style="margin-top:16px">
       <button class="chip ${c.dia===hoy?'on':''}" data-act="con-dia" data-id="${hoy}">Hoy</button>
       <button class="chip ${c.dia===addDias(hoy,-1)?'on':''}" data-act="con-dia" data-id="${addDias(hoy,-1)}">Ayer</button>
       <input type="date" id="con-fecha" value="${c.dia}" max="${hoy}" style="border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 10px;font-size:13px"/>
@@ -491,6 +503,8 @@ document.addEventListener('click', async e=>{
   if(act==='mes-prev'){ S.mes=mesAnt(S.mes); cargar(); return; }
   if(act==='mes-next'){ if(S.mes<mesDe(hoyBogota())){ S.mes=mesSig(S.mes); cargar(); } return; }
   if(act==='filtro-ped'){ S.filtroPed=id; render(); return; }
+  if(act==='ir-conciliar'){ S.tab='conciliar'; cargar(); return; }
+  if(act==='ver-comp-ver'){ const p=(S.verif||[]).find(x=>x.id===id); if(p&&p.comprobante_path) verComprobante(p.comprobante_path); return; }
   if(act==='con-dia'){ S.con.dia=id; cargar(); return; }
   if(act==='ver-comp-ped'){ const p=S.con.ped.find(x=>x.id===id); if(p&&p.comprobante_path) verComprobante(p.comprobante_path); else toast('Esta venta no tiene comprobante'); return; }
   if(act==='nuevo-ing'){ formIngreso(); return; }
@@ -503,7 +517,10 @@ document.addEventListener('click', async e=>{
   if(act==='tema'){ const r=document.documentElement; const oscuro=getComputedStyle(r).getPropertyValue('--bg').trim()==='#0F0D11'; r.dataset.tema=oscuro?'light':'dark'; try{localStorage.setItem('nf_tema',r.dataset.tema)}catch(_){} return; }
   if(act==='salir'){ await sb.auth.signOut(); S.user=null; S.res=null; render(); return; }
   try{
-    if(act==='estado-ped'){ await q(sb.from('pedidos').update({estado:el.dataset.v}).eq('id',id)); toast('Actualizado'); cargar(); }
+    if(act==='verif-ok'){ await q(sb.from('pedidos').update({verificacion:'ok'}).eq('id',id)); toast('Pago verificado'); cargar(); }
+    else if(act==='verif-problema'){ await q(sb.from('pedidos').update({verificacion:'problema'}).eq('id',id)); toast('Marcado con problema'); cargar(); }
+    else if(act==='verif-todos'){ const n=(S.verif||[]).filter(x=>x.verificacion==='pendiente').length; if(n && confirm('¿Marcar como verificados los '+n+' pagos pendientes? Hazlo solo si ya los comparaste con tu cuenta.')){ await q(sb.from('pedidos').update({verificacion:'ok'}).eq('verificacion','pendiente')); toast('Listo'); cargar(); } }
+    else if(act==='estado-ped'){ const pp=S.ped.find(x=>x.id===id); if(el.dataset.v==='enviada' && pp && pp.verificacion==='pendiente' && !confirm('Este pago todavía no está verificado. ¿Marcar como enviada igual?')) return; await q(sb.from('pedidos').update({estado:el.dataset.v}).eq('id',id)); toast('Actualizado'); cargar(); }
     else if(act==='copiar-envio'){ const p=S.ped.find(x=>x.id===id); const t=`${p.cliente}\nCC ${p.cedula}\nTel ${p.telefono}\n${p.direccion}\n${p.ciudad}`; try{ await navigator.clipboard.writeText(t); toast('Datos copiados'); }catch(_){ toast('No se pudo copiar'); } }
     else if(act==='pagar-gas'){ await q(sb.from('gastos').update({estado:'pagado'}).eq('id',id)); cerrarModal(); toast('Marcado como pagado'); cargar(); }
     else if(act==='borrar-ing'){ if(confirm('¿Eliminar este ingreso? Queda guardado en la papelera.')){ await q(sb.from('ingresos').delete().eq('id',id)); cerrarModal(); toast('Eliminado'); cargar(); } }

@@ -382,12 +382,12 @@ const DB = {
     if(error) throw error;
   },
   async cargarLive(){
-    const {data,error} = await sb.from('nf_bot_estado').select('modo_live,producto_live,orden_live,bot_pausado').eq('id',1).single();
+    const {data,error} = await sb.from('nf_bot_estado').select('modo_live,producto_live,orden_live,bot_pausado,autoconfirmar').eq('id',1).single();
     if(error) throw error;
     return data;
   },
   async guardarLive(patch){
-    const {data,error} = await sb.from('nf_bot_estado').update(patch).eq('id',1).select('modo_live,producto_live,orden_live,bot_pausado').single();
+    const {data,error} = await sb.from('nf_bot_estado').update(patch).eq('id',1).select('modo_live,producto_live,orden_live,bot_pausado,autoconfirmar').single();
     if(error) throw error;
     return data;
   },
@@ -743,6 +743,7 @@ function LiveView({productos}){
   if(!estado) return <div className="loading-page"><div className="spinner"/></div>;
   const activo = !!estado.modo_live;
   const pausado = !!estado.bot_pausado;
+  const auto = !!estado.autoconfirmar;
   const orden = Array.isArray(estado.orden_live) ? estado.orden_live : [];
   const porId = Object.fromEntries(productos.map(p=>[p.id,p]));
   const enLive = orden.map(id=>porId[id]).filter(Boolean);
@@ -767,6 +768,17 @@ function LiveView({productos}){
         </div>
         <button className={`btn btn-lg ${pausado?'btn-primary':'btn-danger-soft'}`} disabled={guardando} onClick={()=>{ if(pausado || confirm('¿Pausar el bot? Dejará de responder a las clientas.')) cambiar({bot_pausado:!pausado}); }}>
           {pausado?'Reanudar':'Pausar'}
+        </button>
+      </div>
+      <div style={{background:'var(--white)',border:'1.5px solid var(--border)',borderRadius:'var(--r)',padding:'1rem 1.1rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:12}}>
+        <div>
+          <div style={{fontWeight:600,fontSize:16}}>{auto?'Confirmación automática de pagos: ACTIVADA':'Confirmación automática de pagos: apagada'}</div>
+          <div style={{fontSize:13,color:'var(--night-3)',marginTop:4}}>
+            {auto ? 'Si el comprobante es válido (monto exacto y referencia sin repetir), el bot da el pago por registrado y pide los datos de envío. Tú verificas después en el panel (Conciliar). Si algo no cuadra, te avisa por WhatsApp.' : 'Cada comprobante te llega por WhatsApp y tú respondes SI con el código.'}
+          </div>
+        </div>
+        <button className={`btn btn-lg ${auto?'btn-danger-soft':'btn-primary'}`} disabled={guardando} onClick={()=>cambiar({autoconfirmar:!auto})}>
+          {auto?'Apagar':'Activar'}
         </button>
       </div>
       <div style={{background:activo?'var(--red-l)':'var(--white)',border:'1.5px solid '+(activo?'var(--red)':'var(--border)'),borderRadius:'var(--r)',padding:'1rem 1.1rem',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
