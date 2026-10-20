@@ -402,6 +402,35 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .hist-meta{font-size:11.5px;color:var(--night-3);}
 .hist-filtros{display:flex;gap:8px;flex-wrap:wrap;padding:.75rem 1.25rem 0;align-items:center;}
 .hist-filtros select{height:34px;border:1.5px solid var(--border);border-radius:99px;padding:0 12px;font-size:12.5px;background:white;color:var(--night-2);}
+
+/* INVENTARIO v2: tallas visibles y descontar rapido */
+.tg{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:5px;margin:2px 0 9px;}
+.tg-c{display:flex;flex-direction:column;align-items:center;padding:4px 0 5px;border-radius:8px;background:var(--mist);line-height:1.15;}
+.tg-c span{font-size:9.5px;font-weight:700;color:var(--night-3);letter-spacing:.2px;}
+.tg-c b{font-size:15px;font-weight:700;color:var(--night);}
+.tg-c.low{background:var(--amber-l);} .tg-c.low b{color:var(--amber);}
+.tg-c.out{background:var(--red-l);} .tg-c.out b{color:var(--red);}
+.tg-vacio{font-size:11.5px;color:var(--night-3);margin:2px 0 9px;line-height:1.4;}
+.auto-nota{font-size:11.5px;color:var(--night-3);padding:.6rem 1.25rem 0;}
+.stock-prod{display:flex;gap:12px;align-items:center;}
+.stock-prod img,.stock-prod .sp-ph{width:54px;height:72px;border-radius:10px;object-fit:cover;background:var(--blush-l);flex:none;}
+.stock-prod .sp-n{font-weight:700;font-size:16px;line-height:1.25;}
+.stock-prod .sp-p{font-size:13px;color:var(--blush-d);font-weight:700;margin-top:2px;}
+.sr{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--mist);border-radius:14px;}
+.sr.malo{background:var(--red-l);}
+.sr-t{flex:1;min-width:0;}
+.sr-t .a{font-size:15px;font-weight:700;color:var(--night);}
+.sr-t .b{font-size:12px;color:var(--night-3);margin-top:1px;}
+.sr-t .b .res{font-weight:700;}
+.sr-t .b .res.amber{color:var(--amber);} .sr-t .b .res.green{color:var(--green);} .sr-t .b .res.red{color:var(--red);}
+.sr-ctl{display:flex;align-items:center;gap:6px;}
+.sr-ctl button{width:42px;height:42px;border-radius:50%;border:none;font-size:22px;font-weight:600;line-height:1;cursor:pointer;background:white;color:var(--night-2);box-shadow:0 1px 3px rgba(0,0,0,.12);}
+.sr-ctl button:active{transform:scale(.94);}
+.sr-ctl input{width:58px;height:44px;text-align:center;font-size:20px;font-weight:700;border:1.5px solid var(--border);border-radius:12px;background:white;color:var(--night);outline:none;}
+.sr-ctl input:focus{border-color:var(--blush-d);}
+.sr-ctl input::-webkit-outer-spin-button,.sr-ctl input::-webkit-inner-spin-button{-webkit-appearance:none;}
+.sr-conteo input{width:92px;}
+.sr-dif{font-size:12px;font-weight:700;min-width:44px;text-align:right;}
 </style>
 </head>
 <body>
@@ -676,7 +705,7 @@ function Editor({item, onSave, onClose}){
 /* ── CARD ── */
 function ProductCard({prod, onEdit, onDelete, onStock, onHist}){
   const badge = stockInfo(prod);
-  const tallasConStock = Object.entries(prod.tallas||{}).filter(([,v])=>v>0);
+  const tallasLista = Object.entries(prod.tallas||{}).sort((a,b)=>(Number(a[0])||99)-(Number(b[0])||99));
 
   return (
     <div className="card">
@@ -690,18 +719,20 @@ function ProductCard({prod, onEdit, onDelete, onStock, onHist}){
       <div className="card-body">
         {prod.ref && <div className="card-ref">{prod.ref}</div>}
         <div className="card-name">{prod.nombre}</div>
-        <div className="tallas-row">
-          {tallasConStock.slice(0,8).map(([t,q])=>{
-            const cls = q===0?'out':q<=1?'low':'';
-            return <span className={`t-chip ${cls}`} key={t} title={`${q} unidades`}>{t}</span>;
-          })}
-          {tallasConStock.length>8 && <span className="t-chip">+{tallasConStock.length-8}</span>}
-        </div>
+        {tallasLista.length===0
+          ? <div className="tg-vacio">Todavía no hay unidades. Toca <strong>+ Sumar</strong> para cargar lo que llegó.</div>
+          : <div className="tg">
+              {tallasLista.map(([t,q])=>{
+                const n = parseInt(q)||0;
+                return <div className={`tg-c ${n===0?'out':n<=2?'low':''}`} key={t} title={`Talla ${t}: ${n} unidades`}><span>T{t}</span><b>{n}</b></div>;
+              })}
+            </div>
+        }
         {prod.precio && <div className="card-price">{fmt(prod.precio)}</div>}
         <div className="card-acts">
-          <button className="btn btn-in" onClick={()=>onStock(prod,'llegada')}>+ Llegó</button>
-          <button className="btn btn-out" onClick={()=>onStock(prod,'venta_manual')}>− Vendí</button>
-          <button className="btn btn-cnt" onClick={()=>onStock(prod,'conteo')}>Contar</button>
+          <button className="btn btn-out" title="Descontar unidades vendidas por fuera del bot (mayoristas, en físico)" onClick={()=>onStock(prod,'venta_manual')}>− Descontar</button>
+          <button className="btn btn-in" title="Sumar mercancía que llegó" onClick={()=>onStock(prod,'llegada')}>+ Sumar</button>
+          <button className="btn btn-cnt" title="Contar en físico y corregir el inventario" onClick={()=>onStock(prod,'conteo')}>Contar</button>
           <button className="btn btn-hist" onClick={()=>onHist(prod)}>Ver historial</button>
         </div>
         <div style={{display:'flex',gap:6,marginTop:10}}>
@@ -719,9 +750,9 @@ function ProductCard({prod, onEdit, onDelete, onStock, onHist}){
 
 /* ── MOVER STOCK ── */
 const MODOS = {
-  llegada:{titulo:'Llegó mercancía', btn:'Registrar llegada', ayuda:'Escribe cuántas unidades llegaron de cada talla. Se suman a lo que ya hay.'},
-  venta_manual:{titulo:'Vendí (WhatsApp o en físico)', btn:'Registrar venta', ayuda:'Escribe cuántas unidades vendiste de cada talla. Se restan del inventario. Las ventas que cierra el bot se descuentan solas.'},
-  conteo:{titulo:'Contar inventario', btn:'Guardar conteo', ayuda:'Cuenta lo que hay en físico y escríbelo solo en las tallas que contaste. La app te muestra la diferencia y deja el inventario con lo que contaste.'},
+  venta_manual:{titulo:'Descontar unidades', ayuda:'Para ventas que no hizo el bot (mayoristas, en físico). Toca + por cada unidad que salió. Las ventas del bot se descuentan solas.'},
+  llegada:{titulo:'Sumar unidades', ayuda:'Para mercancía que llegó. Toca + por cada unidad que entró, o escribe el número.'},
+  conteo:{titulo:'Contar inventario', ayuda:'Cuenta lo que hay en físico y escribe el número de cada talla que contaste. La app te muestra la diferencia y deja el inventario con lo que contaste.'},
 };
 function StockModal({prod, modo, onClose, onDone}){
   const [actual,setActual] = useState(prod.tallas||{});
@@ -731,7 +762,9 @@ function StockModal({prod, modo, onClose, onDone}){
   const [saving,setSaving] = useState(false);
   useEffect(()=>{ DB.cargarUno(prod.id).then(p=>setActual(p.tallas||{})).catch(()=>{}); },[]);
   const tipo = (modo==='llegada' && dev) ? 'devolucion' : modo;
-  const tallas = [...new Set([...TALLAS_LIST, ...Object.keys(actual)])].sort((a,b)=>(Number(a)||99)-(Number(b)||99));
+  const llaves = Object.keys(actual);
+  const base = modo==='venta_manual' ? llaves : [...new Set([...TALLAS_LIST, ...llaves])];
+  const tallas = (base.length ? base : TALLAS_LIST).sort((a,b)=>(Number(a)||99)-(Number(b)||99));
   const hay = t => parseInt(actual[t])||0;
   const num = t => { const v = vals[t]; return (v===undefined||v==='') ? null : parseInt(v); };
   const filas = tallas.map(t=>({t, n:num(t)})).filter(x=>x.n!==null && !isNaN(x.n));
@@ -741,22 +774,31 @@ function StockModal({prod, modo, onClose, onDone}){
   const unidades = movs.reduce((s,m)=>s+m.cantidad,0);
   const difTotal = movs.reduce((s,m)=>s+(m.cantidad-hay(m.talla)),0);
   const puede = movs.length>0 && excede.length===0 && invalidas.length===0 && !saving;
-  let resumen = 'Escribe las cantidades arriba.';
+  function paso(t,d){
+    setVals(v=>{
+      let n = (parseInt(v[t])||0) + d;
+      if(n < 0) n = 0;
+      if(tipo==='venta_manual' && n > hay(t)) n = hay(t);
+      return {...v,[t]: n===0 ? '' : String(n)};
+    });
+  }
+  let resumen = modo==='conteo' ? 'Escribe lo que contaste en cada talla.' : 'Toca + en las tallas que vas a '+(modo==='venta_manual'?'descontar':'sumar')+'.';
   if(movs.length>0){
     if(tipo==='conteo') resumen = difTotal===0 ? 'El conteo coincide con el inventario.' : 'Diferencia total: '+(difTotal>0?'+':'')+difTotal+' unidades. El inventario quedará con lo que contaste.';
-    else if(tipo==='venta_manual') resumen = 'Se restarán '+unidades+' unidad'+(unidades===1?'':'es')+' del inventario.';
+    else if(tipo==='venta_manual') resumen = 'Se descontarán '+unidades+' unidad'+(unidades===1?'':'es')+'.';
     else resumen = 'Se sumarán '+unidades+' unidad'+(unidades===1?'':'es')+(tipo==='devolucion'?' (devolución).':'.');
   }
-  if(excede.length>0) resumen = 'No hay suficiente en la talla '+excede.map(x=>x.t+' (hay '+hay(x.t)+')').join(', ')+'.';
+  if(excede.length>0) resumen = 'Solo hay '+excede.map(x=>hay(x.t)+' en la talla '+x.t).join(' y ')+'.';
   async function guardar(){
     if(!puede) return;
     setSaving(true);
     try{
       const nuevas = await DB.moverStock(prod.id,tipo,movs,nota);
-      toast('✓ '+(tipo==='conteo'?'Conteo guardado':tipo==='venta_manual'?'Venta registrada':tipo==='devolucion'?'Devolución registrada':'Llegada registrada'));
+      toast('✓ '+(tipo==='conteo'?'Conteo guardado':tipo==='venta_manual'?'Unidades descontadas':tipo==='devolucion'?'Devolución registrada':'Unidades sumadas'));
       onDone(nuevas); onClose();
     }catch(err){ toast('Error: '+(err.message||'no se pudo guardar')); setSaving(false); }
   }
+  const textoBtn = saving ? '...' : tipo==='conteo' ? 'Guardar conteo' : tipo==='venta_manual' ? (unidades>0?'Descontar '+unidades:'Descontar') : (unidades>0?'Sumar '+unidades:'Sumar');
   return <>
     <div className="drawer-bg" onClick={onClose}/>
     <div className="drawer">
@@ -765,27 +807,50 @@ function StockModal({prod, modo, onClose, onDone}){
         <button className="close-btn" onClick={onClose}><Ico.X/></button>
       </div>
       <div className="drawer-body">
-        <div style={{fontWeight:700,fontSize:15}}>{prod.nombre}{prod.ref?<span style={{color:'var(--night-3)',fontWeight:500}}> · {prod.ref}</span>:null}</div>
+        <div className="stock-prod">
+          {prod.foto_url ? <img src={prod.foto_url} alt=""/> : <div className="sp-ph"/>}
+          <div>
+            <div className="sp-n">{prod.nombre}{prod.ref?<span style={{color:'var(--night-3)',fontWeight:500}}> · {prod.ref}</span>:null}</div>
+            {prod.precio ? <div className="sp-p">{fmt(prod.precio)}</div> : null}
+          </div>
+        </div>
         <div className="stock-ayuda">{MODOS[modo].ayuda}</div>
         {modo==='llegada' && (
           <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13}}>
             <input type="checkbox" checked={dev} onChange={e=>setDev(e.target.checked)}/> Es una devolución de una clienta
           </label>
         )}
-        <div className="stock-grid">
+        {modo==='venta_manual' && llaves.length===0 && <div className="stock-resumen err">Este producto no tiene unidades cargadas todavía.</div>}
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
           {tallas.map(t=>{
             const n = num(t);
-            const dif = (tipo==='conteo' && n!==null && !isNaN(n)) ? n-hay(t) : null;
-            const malo = (tipo==='venta_manual' && n!==null && n>hay(t)) || (n!==null && n<0);
+            const valido = n!==null && !isNaN(n);
+            const malo = (tipo==='venta_manual' && valido && n>hay(t)) || (valido && n<0);
+            const dif = (tipo==='conteo' && valido) ? n-hay(t) : null;
+            let res = null;
+            if(valido && tipo==='venta_manual' && !malo) res = <> → quedan <span className="res amber">{hay(t)-n}</span></>;
+            if(valido && (tipo==='llegada'||tipo==='devolucion')) res = <> → quedan <span className="res green">{hay(t)+n}</span></>;
             return (
-              <div className={`stock-cell ${malo?'malo':''}`} key={t}>
-                <div className="st-t">Talla {t}</div>
-                <div className="st-hay">Hay {hay(t)}</div>
-                <input type="number" min="0" inputMode="numeric" value={vals[t]===undefined?'':vals[t]}
-                  onChange={e=>setVals(v=>({...v,[t]:e.target.value}))} placeholder={tipo==='conteo'?'Contado':'0'}/>
-                <div className={`st-dif ${dif===null?'':dif>0?'dif-mas':dif<0?'dif-menos':'dif-cero'}`}>
-                  {dif===null ? '' : dif===0 ? 'Igual' : (dif>0?'+':'')+dif}
+              <div className={`sr ${malo?'malo':''} ${tipo==='conteo'?'sr-conteo':''}`} key={t}>
+                <div className="sr-t">
+                  <div className="a">Talla {t}</div>
+                  <div className="b">Hay {hay(t)}{res}</div>
                 </div>
+                {tipo==='conteo'
+                  ? <>
+                      <div className="sr-ctl">
+                        <input type="number" min="0" inputMode="numeric" value={vals[t]===undefined?'':vals[t]}
+                          onChange={e=>setVals(v=>({...v,[t]:e.target.value}))} placeholder="Contado"/>
+                      </div>
+                      <div className={`sr-dif ${dif===null?'':dif>0?'dif-mas':dif<0?'dif-menos':'dif-cero'}`}>{dif===null?'':dif===0?'Igual':(dif>0?'+':'')+dif}</div>
+                    </>
+                  : <div className="sr-ctl">
+                      <button type="button" onClick={()=>paso(t,-1)} aria-label="Quitar uno">−</button>
+                      <input type="number" min="0" inputMode="numeric" value={vals[t]===undefined?'':vals[t]}
+                        onChange={e=>setVals(v=>({...v,[t]:e.target.value}))} placeholder="0"/>
+                      <button type="button" onClick={()=>paso(t,1)} aria-label="Agregar uno">+</button>
+                    </div>
+                }
               </div>
             );
           })}
@@ -793,20 +858,21 @@ function StockModal({prod, modo, onClose, onDone}){
         <div className="field">
           <label>Nota (opcional)</label>
           <input value={nota} onChange={e=>setNota(e.target.value)} maxLength={200}
-            placeholder={tipo==='llegada'?'Ej: llegada del proveedor, factura 123':tipo==='venta_manual'?'Ej: venta en físico, regalo, muestra':tipo==='conteo'?'Ej: conteo de fin de mes':'Ej: cambio de talla'}/>
+            placeholder={tipo==='llegada'?'Ej: llegada del proveedor, factura 123':tipo==='venta_manual'?'Ej: venta mayorista a Laura':tipo==='conteo'?'Ej: conteo de fin de mes':'Ej: cambio de talla'}/>
         </div>
         <div className={`stock-resumen ${excede.length>0?'err':''}`}>{resumen}</div>
       </div>
       <div className="drawer-footer">
         <button className="btn btn-ghost" onClick={onClose} style={{flex:1}}>Cancelar</button>
-        <button className="btn btn-primary btn-lg" onClick={guardar} disabled={!puede} style={{flex:2,opacity:puede?1:.5}}>{saving?'...':MODOS[modo].btn}</button>
+        <button className="btn btn-primary btn-lg" onClick={guardar} disabled={!puede} style={{flex:2,opacity:puede?1:.5}}>{textoBtn}</button>
       </div>
     </div>
   </>;
 }
 
 /* ── HISTORIAL ── */
-const TIPO_LABEL = {llegada:'Llegada', venta_bot:'Venta del bot', venta_manual:'Venta manual', conteo:'Conteo', devolucion:'Devolución', ajuste:'Ajuste'};
+const TIPO_LABEL = {llegada:'Se sumó', venta_bot:'Vendió el bot', venta_manual:'Descuento manual', conteo:'Conteo', devolucion:'Devolución', ajuste:'Ajuste'};
+const CHIP_LABEL = {llegada:'Sumas', venta_bot:'Bot', venta_manual:'Manuales', conteo:'Conteos', devolucion:'Devoluciones'};
 function HistorialView({productos, filtro, setFiltro}){
   const [rows,setRows] = useState(null);
   const [tipo,setTipo] = useState('todos');
@@ -832,7 +898,7 @@ function HistorialView({productos, filtro, setFiltro}){
         {ids.map(id=><option key={id} value={id}>{nombre(id)||(rows.find(r=>r.producto_id===id)||{}).producto_nombre||id}</option>)}
       </select>
       {['todos','llegada','venta_bot','venta_manual','conteo','devolucion'].map(t=>(
-        <button key={t} className={`chip ${tipo===t?'on':''}`} onClick={()=>setTipo(t)}>{t==='todos'?'Todo':TIPO_LABEL[t]}</button>
+        <button key={t} className={`chip ${tipo===t?'on':''}`} onClick={()=>setTipo(t)}>{t==='todos'?'Todo':CHIP_LABEL[t]}</button>
       ))}
     </div>
     <div className="hist-list">
@@ -1174,9 +1240,21 @@ function App(){
   const [cat, setCat] = useState('Todos');
   const [q, setQ] = useState('');
   const [stockModal, setStockModal] = useState(null);
+  const escrituraRef = useRef(0);
   const [histProd, setHistProd] = useState('todos');
 
   useEffect(()=>{ if(auth) cargar(); },[auth]);
+  useEffect(()=>{
+    if(!auth) return;
+    const refrescar = ()=>{
+      if(document.hidden) return;
+      const t0 = Date.now();
+      DB.cargar().then(d=>{ if(escrituraRef.current > t0 - 500) return; setProds(d); }).catch(()=>{});
+    };
+    const id = setInterval(refrescar, 15000);
+    document.addEventListener('visibilitychange', refrescar);
+    return ()=>{ clearInterval(id); document.removeEventListener('visibilitychange', refrescar); };
+  },[auth]);
 
   async function cargar(){
     setCargando(true);
@@ -1257,6 +1335,8 @@ function App(){
         <div className="stat"><div className="stat-label">Agotados</div><div className="stat-val danger">{agotados}</div></div>
       </div>
 
+      <div className="auto-nota">Las unidades se actualizan solas cuando el bot vende.</div>
+
       {/* TOOLBAR */}
       <div className="toolbar">
         {cats.map(c=>(
@@ -1291,7 +1371,7 @@ function App(){
 
       {/* MOVER STOCK */}
       {stockModal && <StockModal prod={stockModal.prod} modo={stockModal.modo} onClose={()=>setStockModal(null)}
-        onDone={tallas=>setProds(ps=>ps.map(x=>x.id===stockModal.prod.id?{...x,tallas}:x))}/>}
+        onDone={tallas=>{ escrituraRef.current = Date.now(); setProds(ps=>ps.map(x=>x.id===stockModal.prod.id?{...x,tallas}:x)); }}/>}
 
       {/* CONFIRM */}
       {confirm && (
