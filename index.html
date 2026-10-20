@@ -366,6 +366,42 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
   color:var(--blush-d);text-decoration:none;
 }
 .pedido-comprobante img{width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);}
+
+/* INVENTARIO: movimientos */
+.card-acts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;}
+.card-acts .btn{height:32px;font-size:12px;padding:0 4px;justify-content:center;border:none;font-weight:600;}
+.btn-in{background:var(--green-l);color:var(--green);} .btn-in:hover{background:#cfe8da;}
+.btn-out{background:var(--amber-l);color:var(--amber);} .btn-out:hover{background:#f5e2b5;}
+.btn-cnt{background:var(--blush-l);color:var(--blush-dd);} .btn-cnt:hover{background:var(--blush-m);}
+.card-acts .btn-hist{grid-column:1/-1;background:transparent;border:1.5px solid var(--border);color:var(--night-2);height:28px;font-size:11.5px;}
+.stock-ayuda{font-size:13px;color:var(--night-3);line-height:1.5;}
+.stock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.stock-cell{background:var(--mist);border-radius:12px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.stock-cell .st-t{font-size:12px;font-weight:700;color:var(--night-2);text-transform:uppercase;}
+.stock-cell .st-hay{font-size:11px;color:var(--night-3);}
+.stock-cell input{width:100%;height:44px;text-align:center;font-size:18px;font-weight:600;border:1.5px solid var(--border);border-radius:10px;background:white;color:var(--night);outline:none;}
+.stock-cell input:focus{border-color:var(--blush-d);}
+.stock-cell input::-webkit-outer-spin-button,.stock-cell input::-webkit-inner-spin-button{-webkit-appearance:none;}
+.stock-cell.malo input{border-color:var(--red);background:var(--red-l);}
+.stock-cell .st-dif{font-size:11px;font-weight:700;min-height:14px;}
+.dif-mas{color:var(--green);} .dif-menos{color:var(--red);} .dif-cero{color:var(--night-3);}
+.stock-resumen{font-size:13px;padding:10px 12px;border-radius:10px;background:var(--blush-l);color:var(--blush-dd);line-height:1.45;}
+.stock-resumen.err{background:var(--red-l);color:var(--red);}
+.hist-list{display:flex;flex-direction:column;gap:8px;padding:.75rem 1.25rem 2rem;}
+.hist-dia{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--night-3);margin:10px 2px 0;}
+.hist-item{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;}
+.hist-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.hist-prod{font-size:14px;font-weight:700;color:var(--night);}
+.hist-tipo{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap;}
+.hist-tipo.llegada,.hist-tipo.devolucion{background:var(--green-l);color:var(--green);}
+.hist-tipo.venta_bot,.hist-tipo.venta_manual{background:var(--amber-l);color:var(--amber);}
+.hist-tipo.conteo,.hist-tipo.ajuste{background:var(--blush-l);color:var(--blush-dd);}
+.hist-tallas{display:flex;flex-wrap:wrap;gap:6px;}
+.hist-t{font-size:12px;font-weight:600;padding:3px 8px;border-radius:8px;background:var(--mist);}
+.hist-t.mas{color:var(--green);} .hist-t.menos{color:var(--red);}
+.hist-meta{font-size:11.5px;color:var(--night-3);}
+.hist-filtros{display:flex;gap:8px;flex-wrap:wrap;padding:.75rem 1.25rem 0;align-items:center;}
+.hist-filtros select{height:34px;border:1.5px solid var(--border);border-radius:99px;padding:0 12px;font-size:12.5px;background:white;color:var(--night-2);}
 </style>
 </head>
 <body>
@@ -389,6 +425,21 @@ const TALLAS_LIST = ['4','6','8','10','12','14'];
 const DB = {
   async cargar(){
     const {data,error} = await sb.from('nf_productos').select('*').order('created_at',{ascending:false});
+    if(error) throw error;
+    return data||[];
+  },
+  async cargarUno(id){
+    const {data,error} = await sb.from('nf_productos').select('*').eq('id',id).single();
+    if(error) throw error;
+    return data;
+  },
+  async moverStock(id,tipo,movs,nota){
+    const {data,error} = await sb.rpc('nf_mover_stock',{p_producto:id,p_tipo:tipo,p_movs:movs,p_nota:nota||''});
+    if(error) throw error;
+    return data;
+  },
+  async cargarMovimientos(){
+    const {data,error} = await sb.from('nf_movimientos').select('*').order('created_at',{ascending:false}).limit(500);
     if(error) throw error;
     return data||[];
   },
@@ -519,7 +570,8 @@ function Editor({item, onSave, onClose}){
     if(f.precio!=='' && pr>0 && pr<1000){ toast('El precio parece incompleto: escribe 75000 (no 75)'); return; }
     setSaving(true);
     try{
-      const saved = await DB.guardar(f);
+      const payload = isNew ? f : (({tallas, ...resto})=>resto)(f);
+      const saved = await DB.guardar(payload);
       toast(isNew ? '✓ Producto agregado al inventario' : '✓ Cambios guardados');
       onSave(saved);
     } catch(err){ toast('Error: '+err.message); }
@@ -588,12 +640,13 @@ function Editor({item, onSave, onClose}){
         {/* TALLAS */}
         <div>
           <div className="section-title">Cantidad por talla</div>
+          {!isNew && <div className="stock-ayuda" style={{marginBottom:8}}>Para cambiar las unidades usa los botones <strong>Llegó</strong>, <strong>Vendí</strong> o <strong>Contar</strong> de la tarjeta. Así queda anotado en el historial.</div>}
           <div className="tallas-editor">
             {TALLAS_LIST.map(t=>(
               <div className="talla-cell" key={t}>
                 <label>{t}</label>
                 <input
-                  type="number" min="0" className="talla-num"
+                  type="number" min="0" className="talla-num" disabled={!isNew}
                   value={f.tallas[t]||''}
                   onChange={e=>setT(t,e.target.value)}
                   placeholder="0"
@@ -621,7 +674,7 @@ function Editor({item, onSave, onClose}){
 }
 
 /* ── CARD ── */
-function ProductCard({prod, onEdit, onDelete}){
+function ProductCard({prod, onEdit, onDelete, onStock, onHist}){
   const badge = stockInfo(prod);
   const tallasConStock = Object.entries(prod.tallas||{}).filter(([,v])=>v>0);
 
@@ -645,6 +698,12 @@ function ProductCard({prod, onEdit, onDelete}){
           {tallasConStock.length>8 && <span className="t-chip">+{tallasConStock.length-8}</span>}
         </div>
         {prod.precio && <div className="card-price">{fmt(prod.precio)}</div>}
+        <div className="card-acts">
+          <button className="btn btn-in" onClick={()=>onStock(prod,'llegada')}>+ Llegó</button>
+          <button className="btn btn-out" onClick={()=>onStock(prod,'venta_manual')}>− Vendí</button>
+          <button className="btn btn-cnt" onClick={()=>onStock(prod,'conteo')}>Contar</button>
+          <button className="btn btn-hist" onClick={()=>onHist(prod)}>Ver historial</button>
+        </div>
         <div style={{display:'flex',gap:6,marginTop:10}}>
           <button className="btn btn-ghost" style={{flex:1,height:30,fontSize:12}} onClick={()=>onEdit(prod)}>
             <Ico.Edit/> Editar
@@ -656,6 +715,149 @@ function ProductCard({prod, onEdit, onDelete}){
       </div>
     </div>
   );
+}
+
+/* ── MOVER STOCK ── */
+const MODOS = {
+  llegada:{titulo:'Llegó mercancía', btn:'Registrar llegada', ayuda:'Escribe cuántas unidades llegaron de cada talla. Se suman a lo que ya hay.'},
+  venta_manual:{titulo:'Vendí (WhatsApp o en físico)', btn:'Registrar venta', ayuda:'Escribe cuántas unidades vendiste de cada talla. Se restan del inventario. Las ventas que cierra el bot se descuentan solas.'},
+  conteo:{titulo:'Contar inventario', btn:'Guardar conteo', ayuda:'Cuenta lo que hay en físico y escríbelo solo en las tallas que contaste. La app te muestra la diferencia y deja el inventario con lo que contaste.'},
+};
+function StockModal({prod, modo, onClose, onDone}){
+  const [actual,setActual] = useState(prod.tallas||{});
+  const [vals,setVals] = useState({});
+  const [nota,setNota] = useState('');
+  const [dev,setDev] = useState(false);
+  const [saving,setSaving] = useState(false);
+  useEffect(()=>{ DB.cargarUno(prod.id).then(p=>setActual(p.tallas||{})).catch(()=>{}); },[]);
+  const tipo = (modo==='llegada' && dev) ? 'devolucion' : modo;
+  const tallas = [...new Set([...TALLAS_LIST, ...Object.keys(actual)])].sort((a,b)=>(Number(a)||99)-(Number(b)||99));
+  const hay = t => parseInt(actual[t])||0;
+  const num = t => { const v = vals[t]; return (v===undefined||v==='') ? null : parseInt(v); };
+  const filas = tallas.map(t=>({t, n:num(t)})).filter(x=>x.n!==null && !isNaN(x.n));
+  const excede = filas.filter(x=>tipo==='venta_manual' && x.n>hay(x.t));
+  const invalidas = filas.filter(x=>x.n<0 || (tipo!=='conteo' && x.n===0));
+  const movs = filas.filter(x=>x.n>=0 && (tipo==='conteo' || x.n>0)).map(x=>({talla:x.t, cantidad:x.n}));
+  const unidades = movs.reduce((s,m)=>s+m.cantidad,0);
+  const difTotal = movs.reduce((s,m)=>s+(m.cantidad-hay(m.talla)),0);
+  const puede = movs.length>0 && excede.length===0 && invalidas.length===0 && !saving;
+  let resumen = 'Escribe las cantidades arriba.';
+  if(movs.length>0){
+    if(tipo==='conteo') resumen = difTotal===0 ? 'El conteo coincide con el inventario.' : 'Diferencia total: '+(difTotal>0?'+':'')+difTotal+' unidades. El inventario quedará con lo que contaste.';
+    else if(tipo==='venta_manual') resumen = 'Se restarán '+unidades+' unidad'+(unidades===1?'':'es')+' del inventario.';
+    else resumen = 'Se sumarán '+unidades+' unidad'+(unidades===1?'':'es')+(tipo==='devolucion'?' (devolución).':'.');
+  }
+  if(excede.length>0) resumen = 'No hay suficiente en la talla '+excede.map(x=>x.t+' (hay '+hay(x.t)+')').join(', ')+'.';
+  async function guardar(){
+    if(!puede) return;
+    setSaving(true);
+    try{
+      const nuevas = await DB.moverStock(prod.id,tipo,movs,nota);
+      toast('✓ '+(tipo==='conteo'?'Conteo guardado':tipo==='venta_manual'?'Venta registrada':tipo==='devolucion'?'Devolución registrada':'Llegada registrada'));
+      onDone(nuevas); onClose();
+    }catch(err){ toast('Error: '+(err.message||'no se pudo guardar')); setSaving(false); }
+  }
+  return <>
+    <div className="drawer-bg" onClick={onClose}/>
+    <div className="drawer">
+      <div className="drawer-head">
+        <h3>{MODOS[modo].titulo}</h3>
+        <button className="close-btn" onClick={onClose}><Ico.X/></button>
+      </div>
+      <div className="drawer-body">
+        <div style={{fontWeight:700,fontSize:15}}>{prod.nombre}{prod.ref?<span style={{color:'var(--night-3)',fontWeight:500}}> · {prod.ref}</span>:null}</div>
+        <div className="stock-ayuda">{MODOS[modo].ayuda}</div>
+        {modo==='llegada' && (
+          <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13}}>
+            <input type="checkbox" checked={dev} onChange={e=>setDev(e.target.checked)}/> Es una devolución de una clienta
+          </label>
+        )}
+        <div className="stock-grid">
+          {tallas.map(t=>{
+            const n = num(t);
+            const dif = (tipo==='conteo' && n!==null && !isNaN(n)) ? n-hay(t) : null;
+            const malo = (tipo==='venta_manual' && n!==null && n>hay(t)) || (n!==null && n<0);
+            return (
+              <div className={`stock-cell ${malo?'malo':''}`} key={t}>
+                <div className="st-t">Talla {t}</div>
+                <div className="st-hay">Hay {hay(t)}</div>
+                <input type="number" min="0" inputMode="numeric" value={vals[t]===undefined?'':vals[t]}
+                  onChange={e=>setVals(v=>({...v,[t]:e.target.value}))} placeholder={tipo==='conteo'?'Contado':'0'}/>
+                <div className={`st-dif ${dif===null?'':dif>0?'dif-mas':dif<0?'dif-menos':'dif-cero'}`}>
+                  {dif===null ? '' : dif===0 ? 'Igual' : (dif>0?'+':'')+dif}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="field">
+          <label>Nota (opcional)</label>
+          <input value={nota} onChange={e=>setNota(e.target.value)} maxLength={200}
+            placeholder={tipo==='llegada'?'Ej: llegada del proveedor, factura 123':tipo==='venta_manual'?'Ej: venta en físico, regalo, muestra':tipo==='conteo'?'Ej: conteo de fin de mes':'Ej: cambio de talla'}/>
+        </div>
+        <div className={`stock-resumen ${excede.length>0?'err':''}`}>{resumen}</div>
+      </div>
+      <div className="drawer-footer">
+        <button className="btn btn-ghost" onClick={onClose} style={{flex:1}}>Cancelar</button>
+        <button className="btn btn-primary btn-lg" onClick={guardar} disabled={!puede} style={{flex:2,opacity:puede?1:.5}}>{saving?'...':MODOS[modo].btn}</button>
+      </div>
+    </div>
+  </>;
+}
+
+/* ── HISTORIAL ── */
+const TIPO_LABEL = {llegada:'Llegada', venta_bot:'Venta del bot', venta_manual:'Venta manual', conteo:'Conteo', devolucion:'Devolución', ajuste:'Ajuste'};
+function HistorialView({productos, filtro, setFiltro}){
+  const [rows,setRows] = useState(null);
+  const [tipo,setTipo] = useState('todos');
+  const [err,setErr] = useState('');
+  useEffect(()=>{ DB.cargarMovimientos().then(setRows).catch(e=>setErr(e.message)); },[]);
+  if(err) return <div className="empty"><p>No se pudo cargar el historial: {err}</p></div>;
+  if(!rows) return <div className="loading-page"><div className="spinner"/></div>;
+  const nombre = id => (productos.find(p=>p.id===id)||{}).nombre;
+  const lista = rows.filter(r=>(filtro==='todos'||r.producto_id===filtro)&&(tipo==='todos'||r.tipo===tipo));
+  const grupos = [];
+  lista.forEach(r=>{
+    const k = r.producto_id+'|'+r.tipo+'|'+r.created_at.slice(0,19)+'|'+r.nota;
+    let g = grupos.find(x=>x.k===k);
+    if(!g){ g = {k, r, items:[]}; grupos.push(g); }
+    g.items.push(r);
+  });
+  let diaPrev = '';
+  const ids = [...new Set(rows.map(r=>r.producto_id))];
+  return <>
+    <div className="hist-filtros">
+      <select value={filtro} onChange={e=>setFiltro(e.target.value)}>
+        <option value="todos">Todos los productos</option>
+        {ids.map(id=><option key={id} value={id}>{nombre(id)||(rows.find(r=>r.producto_id===id)||{}).producto_nombre||id}</option>)}
+      </select>
+      {['todos','llegada','venta_bot','venta_manual','conteo','devolucion'].map(t=>(
+        <button key={t} className={`chip ${tipo===t?'on':''}`} onClick={()=>setTipo(t)}>{t==='todos'?'Todo':TIPO_LABEL[t]}</button>
+      ))}
+    </div>
+    <div className="hist-list">
+      {grupos.length===0 && <div className="empty"><p>Todavía no hay movimientos{filtro!=='todos'||tipo!=='todos'?' con ese filtro':''}.</p></div>}
+      {grupos.map(g=>{
+        const d = new Date(g.r.created_at);
+        const dia = d.toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
+        const cab = dia!==diaPrev ? <div className="hist-dia" key={'d'+g.k}>{dia}</div> : null;
+        diaPrev = dia;
+        const items = [...g.items].sort((a,b)=>(Number(a.talla)||99)-(Number(b.talla)||99));
+        return <React.Fragment key={g.k}>{cab}
+          <div className="hist-item">
+            <div className="hist-top">
+              <div className="hist-prod">{nombre(g.r.producto_id)||g.r.producto_nombre||g.r.producto_id}</div>
+              <span className={`hist-tipo ${g.r.tipo}`}>{TIPO_LABEL[g.r.tipo]||g.r.tipo}</span>
+            </div>
+            <div className="hist-tallas">
+              {items.map(it=><span key={it.id} className={`hist-t ${it.delta>0?'mas':'menos'}`}>T{it.talla}: {it.delta>0?'+':''}{it.delta} <span style={{color:'var(--night-3)',fontWeight:500}}>(quedan {it.stock_despues})</span></span>)}
+            </div>
+            <div className="hist-meta">{d.toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}{g.r.nota?' · '+g.r.nota:''}</div>
+          </div>
+        </React.Fragment>;
+      })}
+    </div>
+  </>;
 }
 
 /* ── PEDIDOS ── */
@@ -971,6 +1173,8 @@ function App(){
   const [confirm, setConfirm] = useState(null);
   const [cat, setCat] = useState('Todos');
   const [q, setQ] = useState('');
+  const [stockModal, setStockModal] = useState(null);
+  const [histProd, setHistProd] = useState('todos');
 
   useEffect(()=>{ if(auth) cargar(); },[auth]);
 
@@ -1039,10 +1243,11 @@ function App(){
       <div className="tabs">
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
         <button className={`tab ${view==='pedidos'?'on':''}`} onClick={()=>setView('pedidos')}>Pedidos vendidos</button>
+        <button className={`tab ${view==='historial'?'on':''}`} onClick={()=>setView('historial')}>Historial</button>
         <button className={`tab ${view==='live'?'on':''}`} onClick={()=>setView('live')}>Live</button>
       </div>
 
-      {view==='pedidos' ? <PedidosView productos={prods}/> : view==='live' ? <LiveView productos={prods}/> : <>
+      {view==='pedidos' ? <PedidosView productos={prods}/> : view==='historial' ? <HistorialView productos={prods} filtro={histProd} setFiltro={setHistProd}/> : view==='live' ? <LiveView productos={prods}/> : <>
 
       {/* STATS */}
       <div className="stats-bar">
@@ -1074,7 +1279,7 @@ function App(){
                 {total===0 && <button className="btn btn-primary btn-lg" onClick={()=>setEditing({})}>+ Agregar primer producto</button>}
               </div>
             : filtrados.map(p=>(
-                <ProductCard key={p.id} prod={p} onEdit={setEditing} onDelete={setConfirm}/>
+                <ProductCard key={p.id} prod={p} onEdit={setEditing} onDelete={setConfirm} onStock={(prod,modo)=>setStockModal({prod,modo})} onHist={prod=>{ setHistProd(prod.id); setView('historial'); }}/>
               ))
         }
       </div>
@@ -1083,6 +1288,10 @@ function App(){
 
       {/* EDITOR */}
       {editing!==null && <Editor item={editing} onSave={onSave} onClose={()=>setEditing(null)}/>}
+
+      {/* MOVER STOCK */}
+      {stockModal && <StockModal prod={stockModal.prod} modo={stockModal.modo} onClose={()=>setStockModal(null)}
+        onDone={tallas=>setProds(ps=>ps.map(x=>x.id===stockModal.prod.id?{...x,tallas}:x))}/>}
 
       {/* CONFIRM */}
       {confirm && (
