@@ -570,6 +570,7 @@ function Editor({item, onSave, onClose}){
     ref: item.ref||'',
     categoria: item.categoria||'Jeans',
     precio: item.precio||'',
+    linea: item.linea||'premium',
     foto_url: item.foto_url||'',
     tallas: item.tallas||{},
     notas: item.notas||'',
@@ -664,6 +665,15 @@ function Editor({item, onSave, onClose}){
             <label>Precio ($)</label>
             <input type="number" value={f.precio} onChange={e=>set('precio',e.target.value)} placeholder="85000"/>
           </div>
+        </div>
+
+        {/* LINEA (premium / económica) */}
+        <div className="field">
+          <label>Línea (para precios por mayor)</label>
+          <select value={f.linea} onChange={e=>set('linea',e.target.value)}>
+            <option value="premium">Premium (por mayor desde 6: $60.000)</option>
+            <option value="economica">Económica (6 a $50.000, 12 a $46.000)</option>
+          </select>
         </div>
 
         {/* TALLAS */}
