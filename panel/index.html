@@ -484,7 +484,17 @@ async function verIngreso(id){
   const m=(x.nota||'').match(/(nf-[A-Za-z0-9_-]+)/); let ped=null;
   if(m){ try{ ped=(await q(sb.from('pedidos').select('*').eq('idempotency_key',m[1])))[0]||null; }catch(e){} }
   abrirModal(`<h3>${esc(x.concepto)}</h3><div class="kv"><b>Monto</b><span>${fmt(x.monto)}</span><b>Fecha</b><span>${nombreDia(x.fecha)}</span><b>Cliente</b><span>${esc(x.cliente||'—')}</span><b>WhatsApp</b><span>${waLink(x.whatsapp||(ped&&ped.whatsapp))}</span><b>Método</b><span>${esc(x.metodo)}</span><b>Canal</b><span>${esc(x.canal||'—')}</span>${ped&&ped.monto_comprobante!=null?`<b>Comprobante</b><span>${fmt(ped.monto_comprobante)}${ped.banco_comprobante?' · '+esc(ped.banco_comprobante):''}${ped.referencia_comprobante?' · ref. '+esc(ped.referencia_comprobante):''}</span>`:''}<b>Nota</b><span>${esc(x.nota||'—')}</span></div>
-  <div class="acts">${ped&&ped.comprobante_path?`<button class="btn ghost sm" data-act="ver-comp-path" data-id="${esc(ped.comprobante_path)}">${ico('recibo','s')} Ver comprobante</button>`:''}<button class="btn red sm" data-act="borrar-ing" data-id="${x.id}">Eliminar</button><button class="btn ghost sm" data-act="cerrar">Cerrar</button></div>`);
+  <div class="acts">${ped&&ped.comprobante_path?`<button class="btn ghost sm" data-act="ver-comp-path" data-id="${esc(ped.comprobante_path)}">${ico('recibo','s')} Ver comprobante</button>`:''}<button class="btn ghost sm" data-act="editar-ing" data-id="${x.id}">Editar</button><button class="btn red sm" data-act="borrar-ing" data-id="${x.id}">Eliminar</button><button class="btn ghost sm" data-act="cerrar">Cerrar</button></div>`);
+}
+function formEditarIngreso(id){
+  const x=S.ing.find(i=>i.id===id); if(!x) return;
+  abrirForm('Editar ingreso',[
+    {k:'fecha',label:'Fecha',type:'date',def:x.fecha,req:1},{k:'concepto',label:'Concepto',def:x.concepto,req:1},{k:'monto',label:'Monto ($)',type:'number',def:x.monto,req:1},
+    {k:'cliente',label:'Cliente',def:x.cliente||''},{k:'nota',label:'Nota',type:'textarea',def:x.nota||''}],
+    async f=>{ const m=Number(f.monto); if(!(m>0)) throw new Error('El monto debe ser mayor a 0'); await q(sb.from('ingresos').update({fecha:f.fecha,concepto:f.concepto,monto:m,cliente:f.cliente,nota:f.nota}).eq('id',id)); });
+}
+function confirmarBorrado(que,id){
+  abrirModal(`<h3>¿Eliminar ${que==='ing'?'este ingreso':'este gasto'}?</h3><p style="margin:8px 0 14px">Queda guardado en la papelera.</p><div class="acts"><button class="btn red sm" data-act="borrar-${que}-ok" data-id="${id}">Sí, eliminar</button><button class="btn ghost sm" data-act="cerrar">Cancelar</button></div>`);
 }
 function verGasto(id){
   const x=[...S.gas,...S.pend].find(i=>i.id===id); if(!x) return;
@@ -539,8 +549,11 @@ document.addEventListener('click', async e=>{
     else if(act==='estado-ped'){ const pp=S.ped.find(x=>x.id===id); if(el.dataset.v==='enviada' && pp && pp.verificacion==='pendiente' && !confirm('Este pago todavía no está verificado. ¿Marcar como enviada igual?')) return; await q(sb.from('pedidos').update({estado:el.dataset.v}).eq('id',id)); toast('Actualizado'); cargar(); }
     else if(act==='copiar-envio'){ const p=S.ped.find(x=>x.id===id); const t=`${p.cliente}\nCC ${p.cedula}\nTel ${p.telefono}\n${p.direccion}\n${p.ciudad}`; try{ await navigator.clipboard.writeText(t); toast('Datos copiados'); }catch(_){ toast('No se pudo copiar'); } }
     else if(act==='pagar-gas'){ await q(sb.from('gastos').update({estado:'pagado'}).eq('id',id)); cerrarModal(); toast('Marcado como pagado'); cargar(); }
-    else if(act==='borrar-ing'){ if(confirm('¿Eliminar este ingreso? Queda guardado en la papelera.')){ await q(sb.from('ingresos').delete().eq('id',id)); cerrarModal(); toast('Eliminado'); cargar(); } }
-    else if(act==='borrar-gas'){ if(confirm('¿Eliminar este gasto? Queda guardado en la papelera.')){ await q(sb.from('gastos').delete().eq('id',id)); cerrarModal(); toast('Eliminado'); cargar(); } }
+    else if(act==='editar-ing'){ formEditarIngreso(id); }
+    else if(act==='borrar-ing'){ confirmarBorrado('ing',id); }
+    else if(act==='borrar-ing-ok'){ await q(sb.from('ingresos').delete().eq('id',id)); cerrarModal(); toast('Eliminado'); cargar(); }
+    else if(act==='borrar-gas'){ confirmarBorrado('gas',id); }
+    else if(act==='borrar-gas-ok'){ await q(sb.from('gastos').delete().eq('id',id)); cerrarModal(); toast('Eliminado'); cargar(); }
   }catch(err){ toast('Error: '+(err.message||err)); }
 });
 document.addEventListener('input', e=>{
