@@ -958,9 +958,10 @@ function fechaAmable(iso){
   return d.toLocaleDateString('es-CO',{day:'numeric',month:'short'})+', '+hora;
 }
 function agruparPedidos(rows){
+  /* Un paquete = una persona + una dirección: los jeans que son de la misma clienta, misma dirección y mismo estado salen en UNA sola tarjeta (así no se empaca uno y se olvida el otro). */
   const g = {};
-  rows.forEach(r=>{ const k = r.grupo_id || r.id; (g[k] = g[k] || []).push(r); });
-  return Object.values(g).map(fs=>({ id: fs[0].grupo_id || fs[0].id, filas: fs, base: fs[0] }));
+  rows.forEach(r=>{ const k = [r.cliente_telefono||r.grupo_id||r.id, (r.envio_direccion||'').trim().toLowerCase(), r.estado, r.empacado?1:0].join('|'); (g[k] = g[k] || []).push(r); });
+  return Object.values(g).map(fs=>{ const base = fs.slice().sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at))[0]; return { id: fs.map(f=>f.id).join(','), filas: fs, base }; });
 }
 function PedidoEmpaque({g, productos, onMarcar}){
   const b = g.base;
