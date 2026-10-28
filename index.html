@@ -646,7 +646,7 @@ function Editor({item, onSave, onClose}){
     <div className="drawer-bg" onClick={onClose}/>
     <div className="drawer">
       <div className="drawer-head">
-        <h3>{isNew ? 'Nuevo <em>producto</em>' : 'Editar <em>producto</em>'}</h3>
+        <h3>{isNew ? <>Nuevo <em>producto</em></> : <>Editar <em>producto</em></>}</h3>
         <button className="close-btn" onClick={onClose}><Ico.X/></button>
       </div>
 
