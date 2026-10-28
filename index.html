@@ -1013,7 +1013,9 @@ function fechaAmable(iso){
 function agruparPedidos(rows){
   /* Un paquete = una persona + una dirección: los jeans que son de la misma clienta, misma dirección y mismo estado salen en UNA sola tarjeta (así no se empaca uno y se olvida el otro). */
   const g = {};
-  rows.forEach(r=>{ const k = [r.cliente_telefono||r.grupo_id||r.id, (r.envio_direccion||'').trim().toLowerCase(), r.estado, r.empacado?1:0].join('|'); (g[k] = g[k] || []).push(r); });
+  const norm = x=>String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  /* OJO: el estado empacado NO va en la llave. Si una clienta pagó 2 jeans y uno ya se marcó empacado, el otro debe seguir en la MISMA tarjeta (antes salía como un pedido aparte de 1 solo jean y se olvidaba el otro). */
+  rows.forEach(r=>{ const k = [r.cliente_telefono||r.grupo_id||r.id, norm(r.envio_direccion), r.estado].join('|'); (g[k] = g[k] || []).push(r); });
   return Object.values(g).map(fs=>{ const base = fs.slice().sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at))[0]; return { id: fs.map(f=>f.id).join(','), filas: fs, base }; });
 }
 function PedidoEmpaque({g, productos, onMarcar}){
@@ -1022,6 +1024,7 @@ function PedidoEmpaque({g, productos, onMarcar}){
   const esperando = b.estado==='pendiente_confirmacion_humana';
   const empacado = g.filas.every(f=>f.empacado);
   const total = g.filas.reduce((s,f)=>s+(Number(f.precio_total)||0),0);
+  const parcial = !empacado && g.filas.some(f=>f.empacado);
   const nuevo = !empacado && !esperando && (Date.now() - new Date(b.updated_at||b.created_at).getTime() < 120000);
   async function copiar(){
     const t = `Nombre: ${b.envio_nombre||''}\nCédula: ${b.envio_cedula||''}\nTeléfono: ${b.envio_telefono||''}\nDirección: ${b.envio_direccion||''}\nCiudad: ${b.envio_ciudad||''}`;
@@ -1033,10 +1036,11 @@ function PedidoEmpaque({g, productos, onMarcar}){
         <div className="pk-nombre">{nombre}{nuevo && <span className="pk-nuevo">NUEVO</span>}</div>
         <div className="pk-fecha">{fechaAmable(b.updated_at||b.created_at)}</div>
       </div>
+      {parcial && <div className="pk-falta">Ojo: {g.filas.filter(f=>f.empacado).length} de {g.filas.length} jeans de esta clienta ya estaban marcados como empacados. Revisa que vayan juntos en el mismo paquete.</div>}
       <div className="pk-items">
         {g.filas.map(f=>{
           const pr = productos.find(x=>x.id===f.producto_id);
-          return <div className="pk-item" key={f.id}><b>{pr ? pr.nombre.trim() : 'Jean (ya no está en el inventario)'}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}</div>;
+          return <div className="pk-item" key={f.id}><b>{pr ? pr.nombre.trim() : 'Jean (ya no está en el inventario)'}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}{parcial && f.empacado && <span> ✓ ya empacado</span>}{parcial && !f.empacado && <span> · FALTA</span>}</div>;
         })}
       </div>
       <div className="pk-total">Total del pedido: {fmt(total)}</div>
