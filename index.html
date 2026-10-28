@@ -503,6 +503,17 @@ const DB = {
     const {error} = await sb.storage.from('nf-fotos').upload(path,resized,{upsert:true,contentType:'image/jpeg'});
     if(error) throw error;
     return sb.storage.from('nf-fotos').getPublicUrl(path).data.publicUrl;
+  },
+  urlMedidas(id){
+    return sb.storage.from('nf-fotos').getPublicUrl(`medidas/${id}.jpg`).data.publicUrl;
+  },
+  async subirMedidas(file,id){
+    const resized = await redimensionarImagen(file, 1800, 0.9);
+    const path = `medidas/${id}.jpg`;
+    await sb.storage.from('nf-fotos').remove([path]);
+    const {error} = await sb.storage.from('nf-fotos').upload(path,resized,{upsert:true,contentType:'image/jpeg'});
+    if(error) throw error;
+    return DB.urlMedidas(id)+'?v='+Date.now();
   }
 };
 
@@ -594,6 +605,27 @@ function Editor({item, onSave, onClose}){
     setUploading(false);
   }
 
+  /* foto de medidas: se guarda en el almacenamiento (medidas/<id>.jpg); el bot la manda cuando piden medidas */
+  const [medidasSrc, setMedidasSrc] = useState('');
+  const [uploadingM, setUploadingM] = useState(false);
+  useEffect(()=>{
+    if(isNew) return;
+    const im = new Image();
+    im.onload = ()=> setMedidasSrc(DB.urlMedidas(f.id)+'?v='+Date.now());
+    im.src = DB.urlMedidas(f.id)+'?c='+Date.now();
+  },[]);
+  async function handleMedidas(e){
+    const file = e.target.files[0]; if(!file) return;
+    setMedidasSrc(URL.createObjectURL(file));
+    setUploadingM(true);
+    try{
+      const url = await DB.subirMedidas(file, f.id);
+      setMedidasSrc(url);
+      toast('Foto de medidas subida ✓');
+    } catch(err){ toast('Error al subir la foto de medidas'); setMedidasSrc(''); }
+    setUploadingM(false);
+  }
+
   async function handleSave(){
     if(!f.nombre.trim()){ toast('Escribe el nombre del producto'); return; }
     const pr = Number(f.precio);
@@ -637,6 +669,27 @@ function Editor({item, onSave, onClose}){
                 <Ico.Camera/>
                 <p>{uploading ? 'Subiendo foto...' : 'Toca para subir foto'}</p>
                 <small>JPG, PNG o WEBP</small>
+              </div>
+          }
+        </div>
+
+        {/* FOTO DE MEDIDAS */}
+        <div className="field">
+          <label>Foto de medidas (el bot la manda cuando piden las medidas)</label>
+          {medidasSrc
+            ? <div className="foto-preview-wrap">
+                <img src={medidasSrc} className="foto-preview" alt=""/>
+                {uploadingM && <div className="uploading-overlay"><div className="spinner"/></div>}
+                <label className="foto-change">
+                  <Ico.Camera/> Cambiar
+                  <input type="file" accept="image/*" onChange={handleMedidas}/>
+                </label>
+              </div>
+            : <div className="foto-drop">
+                <input type="file" accept="image/*" onChange={handleMedidas}/>
+                <Ico.Camera/>
+                <p>{uploadingM ? 'Subiendo foto de medidas...' : 'Toca para subir la foto de medidas'}</p>
+                <small>Foto de la prenda con las medidas al lado</small>
               </div>
           }
         </div>
