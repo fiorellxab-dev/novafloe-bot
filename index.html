@@ -592,7 +592,7 @@ function Editor({item, onSave, onClose}){
     ref: item.ref||'',
     categoria: item.categoria||'Jeans',
     precio: item.precio||'',
-    linea: item.linea||((item.categoria||'Jeans')==='Jeans' ? 'premium' : 'ninguna'),
+    linea: ((item.categoria||'Jeans')==='Jeans') ? (item.linea||'premium') : 'ninguna', /* mayoreo-seguro */
     foto_url: item.foto_url||'',
     tallas: item.tallas||{},
     notas: item.notas||'',
@@ -602,7 +602,7 @@ function Editor({item, onSave, onClose}){
   const [saving, setSaving] = useState(false);
 
   function set(k,v){ setF(p=>({...p,[k]:v})); }
-  function cambiarCategoria(c){ const lista = tallasDeCategoria(c); setF(p=>({...p, categoria:c, linea: isNew ? (c==='Jeans' ? 'premium' : 'ninguna') : p.linea, tallas: isNew ? Object.fromEntries(Object.entries(p.tallas||{}).filter(([k])=>lista.includes(k))) : p.tallas})); }
+  function cambiarCategoria(c){ const lista = tallasDeCategoria(c); setF(p=>({...p, categoria:c, linea: c==='Jeans' ? (p.linea==='ninguna' ? 'premium' : p.linea) : 'ninguna', tallas: isNew ? Object.fromEntries(Object.entries(p.tallas||{}).filter(([k])=>lista.includes(k))) : p.tallas})); }
   const listaTallas = [...new Set([...tallasDeCategoria(f.categoria), ...Object.keys(f.tallas||{})])].sort(cmpTalla);
   function setT(t,v){ setF(p=>({...p,tallas:{...p.tallas,[t]:parseInt(v)||0}})); }
 
@@ -645,7 +645,8 @@ function Editor({item, onSave, onClose}){
     if(f.precio!=='' && pr>0 && pr<1000){ toast('El precio parece incompleto: escribe 75000 (no 75)'); return; }
     setSaving(true);
     try{
-      const payload = isNew ? f : (({tallas, ...resto})=>resto)(f);
+      const payload = {...(isNew ? f : (({tallas, ...resto})=>resto)(f))};
+      if(payload.linea==='ninguna') payload.linea='premium'; /* la base solo acepta premium/economica */
       const saved = await DB.guardar(payload);
       toast(isNew ? '✓ Producto agregado al inventario' : '✓ Cambios guardados');
       onSave(saved);
@@ -735,11 +736,12 @@ function Editor({item, onSave, onClose}){
 
         {/* LINEA (premium / económica) */}
         <div className="field">
-          <label>Precio por mayor (línea)</label>
-          <select value={f.linea} onChange={e=>set('linea',e.target.value)}>
-            <option value="ninguna">Sin precio por mayor (no hay mayoreo)</option>
-            <option value="premium">Premium (por mayor desde 6: $60.000)</option>
-            <option value="economica">Económica (6 a $50.000, 12 a $46.000)</option>
+          <label>Precio por mayor</label>
+          <select value={f.linea} disabled={f.categoria!=='Jeans'} onChange={e=>set('linea',e.target.value)}>
+            {f.categoria==='Jeans'
+              ? [<option key="p" value="premium">Premium (por mayor desde 6: $60.000)</option>,
+                 <option key="e" value="economica">Económica (6 a $50.000, 12 a $46.000)</option>]
+              : <option value="ninguna">Sin precio por mayor (por ahora solo los jeans tienen mayoreo)</option>}
           </select>
         </div>
 
