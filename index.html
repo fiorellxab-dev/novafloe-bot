@@ -449,7 +449,16 @@ const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 
 const PASS = 'novafloe';
 const CATS = ['Jeans','Blusas','Camisetas','Vestidos','Shorts','Conjuntos','Ropa interior','Otros'];
-const TALLAS_LIST = ['4','6','8','10','12','14'];
+/* tallas-por-categoria */
+const TALLAS_JEANS = ['4','6','8','10','12','14'];
+const TALLAS_LETRAS = ['XS','S','M','L','XL'];
+const CATS_NUMERICAS = ['Jeans','Shorts'];            // el resto (Blusas, Camisetas, Vestidos...) usa XS, S, M, L, XL
+const ORDEN_LETRAS = ['XXS','XS','S','M','L','XL','XXL'];
+const TALLAS_LIST = TALLAS_JEANS;
+function tallasDeCategoria(cat){ return CATS_NUMERICAS.includes(cat) ? TALLAS_JEANS : TALLAS_LETRAS; }
+function ordenTalla(t){ const n = Number(t); if(String(t).trim()!=='' && !isNaN(n)) return n; const i = ORDEN_LETRAS.indexOf(String(t).trim().toUpperCase()); return 1000 + (i<0 ? 99 : i); }
+function cmpTalla(a,b){ return ordenTalla(a)-ordenTalla(b); }
+function etiquetaTalla(t){ return /^[0-9]+$/.test(String(t)) ? 'T'+t : String(t); }
 
 const DB = {
   async cargar(){
@@ -591,6 +600,8 @@ function Editor({item, onSave, onClose}){
   const [saving, setSaving] = useState(false);
 
   function set(k,v){ setF(p=>({...p,[k]:v})); }
+  function cambiarCategoria(c){ const lista = tallasDeCategoria(c); setF(p=>({...p, categoria:c, tallas: isNew ? Object.fromEntries(Object.entries(p.tallas||{}).filter(([k])=>lista.includes(k))) : p.tallas})); }
+  const listaTallas = [...new Set([...tallasDeCategoria(f.categoria), ...Object.keys(f.tallas||{})])].sort(cmpTalla);
   function setT(t,v){ setF(p=>({...p,tallas:{...p.tallas,[t]:parseInt(v)||0}})); }
 
   async function handleFoto(e){
@@ -698,11 +709,11 @@ function Editor({item, onSave, onClose}){
         <div className="row2">
           <div className="field">
             <label>Nombre *</label>
-            <input value={f.nombre} onChange={e=>set('nombre',e.target.value)} placeholder="Jean Tiro Alto"/>
+            <input value={f.nombre} onChange={e=>set('nombre',e.target.value)} placeholder={f.categoria==='Blusas'?'Blusa Lino Blanca':'Jean Tiro Alto'}/>
           </div>
           <div className="field">
             <label>Referencia</label>
-            <input value={f.ref} onChange={e=>set('ref',e.target.value)} placeholder="NF-J001"/>
+            <input value={f.ref} onChange={e=>set('ref',e.target.value)} placeholder={f.categoria==='Blusas'?'NF-B001':'NF-J001'}/>
           </div>
         </div>
 
@@ -710,7 +721,7 @@ function Editor({item, onSave, onClose}){
         <div className="row2">
           <div className="field">
             <label>Categoría</label>
-            <select value={f.categoria} onChange={e=>set('categoria',e.target.value)}>
+            <select value={f.categoria} onChange={e=>cambiarCategoria(e.target.value)}>
               {CATS.map(c=><option key={c}>{c}</option>)}
             </select>
           </div>
@@ -734,7 +745,7 @@ function Editor({item, onSave, onClose}){
           <div className="section-title">Cantidad por talla</div>
           {!isNew && <div className="stock-ayuda" style={{marginBottom:8}}>Para cambiar las unidades usa los botones <strong>Llegó</strong>, <strong>Vendí</strong> o <strong>Contar</strong> de la tarjeta. Así queda anotado en el historial.</div>}
           <div className="tallas-editor">
-            {TALLAS_LIST.map(t=>(
+            {listaTallas.map(t=>(
               <div className="talla-cell" key={t}>
                 <label>{t}</label>
                 <input
@@ -768,7 +779,7 @@ function Editor({item, onSave, onClose}){
 /* ── CARD ── */
 function ProductCard({prod, onEdit, onDelete, onStock, onHist}){
   const badge = stockInfo(prod);
-  const tallasLista = Object.entries(prod.tallas||{}).sort((a,b)=>(Number(a[0])||99)-(Number(b[0])||99));
+  const tallasLista = Object.entries(prod.tallas||{}).sort((a,b)=>cmpTalla(a[0],b[0]));
 
   return (
     <div className="card">
@@ -787,7 +798,7 @@ function ProductCard({prod, onEdit, onDelete, onStock, onHist}){
           : <div className="tg">
               {tallasLista.map(([t,q])=>{
                 const n = parseInt(q)||0;
-                return <div className={`tg-c ${n===0?'out':n<=2?'low':''}`} key={t} title={`Talla ${t}: ${n} unidades`}><span>T{t}</span><b>{n}</b></div>;
+                return <div className={`tg-c ${n===0?'out':n<=2?'low':''}`} key={t} title={`Talla ${t}: ${n} unidades`}><span>{etiquetaTalla(t)}</span><b>{n}</b></div>;
               })}
             </div>
         }
@@ -826,8 +837,9 @@ function StockModal({prod, modo, onClose, onDone}){
   useEffect(()=>{ DB.cargarUno(prod.id).then(p=>setActual(p.tallas||{})).catch(()=>{}); },[]);
   const tipo = (modo==='llegada' && dev) ? 'devolucion' : modo;
   const llaves = Object.keys(actual);
-  const base = modo==='venta_manual' ? llaves : [...new Set([...TALLAS_LIST, ...llaves])];
-  const tallas = (base.length ? base : TALLAS_LIST).sort((a,b)=>(Number(a)||99)-(Number(b)||99));
+  const tallasCat = tallasDeCategoria(prod.categoria);
+  const base = modo==='venta_manual' ? llaves : [...new Set([...tallasCat, ...llaves])];
+  const tallas = (base.length ? base : tallasCat).sort(cmpTalla);
   const hay = t => parseInt(actual[t])||0;
   const num = t => { const v = vals[t]; return (v===undefined||v==='') ? null : parseInt(v); };
   const filas = tallas.map(t=>({t, n:num(t)})).filter(x=>x.n!==null && !isNaN(x.n));
@@ -971,7 +983,7 @@ function HistorialView({productos, filtro, setFiltro}){
         const dia = d.toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
         const cab = dia!==diaPrev ? <div className="hist-dia" key={'d'+g.k}>{dia}</div> : null;
         diaPrev = dia;
-        const items = [...g.items].sort((a,b)=>(Number(a.talla)||99)-(Number(b.talla)||99));
+        const items = [...g.items].sort((a,b)=>cmpTalla(a.talla,b.talla));
         return <React.Fragment key={g.k}>{cab}
           <div className="hist-item">
             <div className="hist-top">
@@ -1036,11 +1048,11 @@ function PedidoEmpaque({g, productos, onMarcar}){
         <div className="pk-nombre">{nombre}{nuevo && <span className="pk-nuevo">NUEVO</span>}</div>
         <div className="pk-fecha">{fechaAmable(b.updated_at||b.created_at)}</div>
       </div>
-      {parcial && <div className="pk-falta">Ojo: {g.filas.filter(f=>f.empacado).length} de {g.filas.length} jeans de esta clienta ya estaban marcados como empacados. Revisa que vayan juntos en el mismo paquete.</div>}
+      {parcial && <div className="pk-falta">Ojo: {g.filas.filter(f=>f.empacado).length} de {g.filas.length} prendas de esta clienta ya estaban marcadas como empacadas. Revisa que vayan juntos en el mismo paquete.</div>}
       <div className="pk-items">
         {g.filas.map(f=>{
           const pr = productos.find(x=>x.id===f.producto_id);
-          return <div className="pk-item" key={f.id}><b>{pr ? pr.nombre.trim() : 'Jean (ya no está en el inventario)'}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}{parcial && f.empacado && <span> ✓ ya empacado</span>}{parcial && !f.empacado && <span> · FALTA</span>}</div>;
+          return <div className="pk-item" key={f.id}><b>{pr ? pr.nombre.trim() : 'Producto (ya no está en el inventario)'}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}{parcial && f.empacado && <span> ✓ ya empacado</span>}{parcial && !f.empacado && <span> · FALTA</span>}</div>;
         })}
       </div>
       <div className="pk-total">Total del pedido: {fmt(total)}</div>
