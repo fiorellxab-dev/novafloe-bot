@@ -105,6 +105,8 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .btn-danger-soft{background:var(--red-l);color:var(--red);border:none;}
 .btn-danger-soft:hover{background:#f5c5ca;}
 .btn-lg{height:44px;font-size:14px;padding:0 20px;}
+/* pulido-tarjetas */
+.card-body .btn-ghost svg,.card-body .btn-danger-soft svg{width:14px;height:14px;flex:none;}
 
 /* STATS */
 .stats-bar{
@@ -368,8 +370,8 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .pedido-comprobante img{width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);}
 
 /* INVENTARIO: movimientos */
-.card-acts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;}
-.card-acts .btn{height:32px;font-size:12px;padding:0 4px;justify-content:center;border:none;font-weight:600;}
+.card-acts{display:grid;grid-template-columns:1.35fr 1fr .9fr;gap:6px;margin-top:10px;}
+.card-acts .btn{height:32px;font-size:11.5px;padding:0 4px;justify-content:center;border:none;font-weight:600;white-space:nowrap;}
 .btn-in{background:var(--green-l);color:var(--green);} .btn-in:hover{background:#cfe8da;}
 .btn-out{background:var(--amber-l);color:var(--amber);} .btn-out:hover{background:#f5e2b5;}
 .btn-cnt{background:var(--blush-l);color:var(--blush-dd);} .btn-cnt:hover{background:var(--blush-m);}
@@ -404,7 +406,7 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .hist-filtros select{height:34px;border:1.5px solid var(--border);border-radius:99px;padding:0 12px;font-size:12.5px;background:white;color:var(--night-2);}
 
 /* INVENTARIO v2: tallas visibles y descontar rapido */
-.tg{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:5px;margin:2px 0 9px;}
+.tg{display:grid;grid-template-columns:repeat(auto-fit,minmax(26px,1fr));gap:4px;margin:2px 0 9px;}
 .tg-c{display:flex;flex-direction:column;align-items:center;padding:4px 0 5px;border-radius:8px;background:var(--mist);line-height:1.15;}
 .tg-c span{font-size:9.5px;font-weight:700;color:var(--night-3);letter-spacing:.2px;}
 .tg-c b{font-size:15px;font-weight:700;color:var(--night);}
@@ -590,7 +592,7 @@ function Editor({item, onSave, onClose}){
     ref: item.ref||'',
     categoria: item.categoria||'Jeans',
     precio: item.precio||'',
-    linea: item.linea||'premium',
+    linea: item.linea||((item.categoria||'Jeans')==='Jeans' ? 'premium' : 'ninguna'),
     foto_url: item.foto_url||'',
     tallas: item.tallas||{},
     notas: item.notas||'',
@@ -600,7 +602,7 @@ function Editor({item, onSave, onClose}){
   const [saving, setSaving] = useState(false);
 
   function set(k,v){ setF(p=>({...p,[k]:v})); }
-  function cambiarCategoria(c){ const lista = tallasDeCategoria(c); setF(p=>({...p, categoria:c, tallas: isNew ? Object.fromEntries(Object.entries(p.tallas||{}).filter(([k])=>lista.includes(k))) : p.tallas})); }
+  function cambiarCategoria(c){ const lista = tallasDeCategoria(c); setF(p=>({...p, categoria:c, linea: isNew ? (c==='Jeans' ? 'premium' : 'ninguna') : p.linea, tallas: isNew ? Object.fromEntries(Object.entries(p.tallas||{}).filter(([k])=>lista.includes(k))) : p.tallas})); }
   const listaTallas = [...new Set([...tallasDeCategoria(f.categoria), ...Object.keys(f.tallas||{})])].sort(cmpTalla);
   function setT(t,v){ setF(p=>({...p,tallas:{...p.tallas,[t]:parseInt(v)||0}})); }
 
@@ -733,8 +735,9 @@ function Editor({item, onSave, onClose}){
 
         {/* LINEA (premium / económica) */}
         <div className="field">
-          <label>Línea (para precios por mayor)</label>
+          <label>Precio por mayor (línea)</label>
           <select value={f.linea} onChange={e=>set('linea',e.target.value)}>
+            <option value="ninguna">Sin precio por mayor (no hay mayoreo)</option>
             <option value="premium">Premium (por mayor desde 6: $60.000)</option>
             <option value="economica">Económica (6 a $50.000, 12 a $46.000)</option>
           </select>
