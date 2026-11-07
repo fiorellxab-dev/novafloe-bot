@@ -1087,7 +1087,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado}){
   const parcial = !empacado && g.filas.some(f=>f.empacado);
   const nuevo = !empacado && !esperando && (Date.now() - new Date(b.updated_at||b.created_at).getTime() < 120000);
   async function copiar(){
-    const t = `Nombre: ${b.envio_nombre||''}\nCédula: ${b.envio_cedula||''}\nTeléfono: ${b.envio_telefono||''}\nDirección: ${b.envio_direccion||''}\nCiudad: ${b.envio_ciudad||''}`;
+    const t = `Nombre: ${b.envio_nombre||''}\nCédula: ${b.envio_cedula||''}\nTeléfono: ${b.envio_telefono||''}\nDirección: ${b.envio_direccion||''}\nCiudad: ${b.envio_ciudad||''}\nCorreo: ${b.envio_email||''}`; /* correo-citas */
     try{ await navigator.clipboard.writeText(t); toast('Datos copiados'); }catch(e){ toast('No se pudo copiar'); }
   }
   return (
@@ -1113,11 +1113,13 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado}){
           <div className="f"><span>Teléfono</span><span>{b.envio_telefono}</span></div>
           <div className="f"><span>Dirección</span><span>{b.envio_direccion}</span></div>
           <div className="f"><span>Ciudad</span><span>{b.envio_ciudad}</span></div>
+          <div className="f"><span>Correo</span><span>{b.envio_email || <em style={{color:'#B07820'}}>Sin correo</em>}</span></div>
+          {!b.envio_email && <div className="pk-falta" style={{marginTop:6,fontSize:16}}>Sin correo: pídeselo a la clienta antes de generar la guía.</div>}
         </div>
       ) : <div className="pk-falta">Todavía no mandó los datos de envío.</div>}
       <div className="pk-acciones">
         {b.envio_direccion && <button className="pk-btn sec" onClick={copiar}>Copiar datos de envío</button>}
-        {!esperando && !empacado && <button className="pk-btn ok" onClick={()=>onMarcar(g,true)}>Ya empaqué este pedido</button>}
+        {!esperando && !empacado && b.estado!=='pidiendo_datos_envio' && <button className="pk-btn ok" onClick={()=>onMarcar(g,true)}>Ya empaqué este pedido</button>}
         {empacado && <button className="pk-btn sec" onClick={()=>onMarcar(g,false)}>Deshacer</button>}
       </div>
     </div>
@@ -1176,12 +1178,13 @@ function PedidosView({productos}){
     }catch(e){ toast('No se pudo guardar: '+e.message); }
   }
   const porRevisar = agruparPedidos(pedidos.filter(p=>/^REVISAR:/.test(p.notas||'')));
+  const faltanDatos = agruparPedidos(pedidos.filter(p=>p.estado==='pidiendo_datos_envio'));
   const listos = agruparPedidos(pedidos.filter(p=>p.estado==='listo_para_enviar'));
   const porEmpacar = listos.filter(g=>!g.filas.every(f=>f.empacado));
   const empacados = listos.filter(g=>g.filas.every(f=>f.empacado));
   const esperando = agruparPedidos(pedidos.filter(p=>p.estado==='pendiente_confirmacion_humana'));
-  const lista = filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : empacados;
-  const vacio = {listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.', esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.',revisar:'No hay pagos por revisar.'}[filtro];
+  const lista = filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : filtro==='datos' ? faltanDatos : empacados;
+  const vacio = {listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.', esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.',revisar:'No hay pagos por revisar.',datos:'No hay clientas pendientes de mandar sus datos.'}[filtro];
 
   return (
     <div>
@@ -1190,7 +1193,9 @@ function PedidosView({productos}){
         <button className={`pk-chip ${filtro==='esperando'?'on':''}`} onClick={()=>setFiltro('esperando')}>Esperando confirmación ({esperando.length})</button>
         <button className={`pk-chip ${filtro==='hechos'?'on':''}`} onClick={()=>setFiltro('hechos')}>Ya empacados ({empacados.length})</button>
         {porRevisar.length>0 && <button className={`pk-chip ${filtro==='revisar'?'on':''}`} onClick={()=>setFiltro('revisar')}>Por revisar ({porRevisar.length})</button>}
+        {faltanDatos.length>0 && <button className={`pk-chip ${filtro==='datos'?'on':''}`} onClick={()=>setFiltro('datos')}>Faltan datos ({faltanDatos.length})</button>}
       </div>
+      {filtro==='datos' && <div className="pk-nota">Estas clientas <b>ya pagaron</b>, pero todavía no mandan sus datos de envío (o su correo). Escríbeles para que los manden. No se deben empacar hasta tener los datos.</div>}
       {filtro==='revisar' && <div className="pk-nota">Estos pagos se confirmaron solos, pero algo se veía raro (monto distinto, comprobante que no se pudo leer o referencia repetida). Verifícalos en el banco y toca <b>Ya lo revisé</b>.</div>}
       {filtro==='esperando' && <div className="pk-nota">Estos pedidos todavía <b>no se deben empacar</b>: el pago se está revisando. Cuando se confirme, pasan solos a "Listo para enviar".</div>}
       <div className="pedidos-list">
@@ -1226,7 +1231,8 @@ function etiquetasChat(c){
   const min = (Date.now()-new Date(c.ultimo_at).getTime())/60000;
   const texto = limpiarPreview(c.ultimo_texto);
   if(c.ultimo_rol==='user' && min>=3 && !c.con_asesora && !CIERRE_CHAT.test(texto)) t.push({k:'rojo', txt:'Sin respuesta · hace '+hace(c.ultimo_at)});
-  if(c.con_asesora) t.push({k:'azul', txt:'Pidió asesora'});
+  if(c.pidio_cita) t.push({k:'azul', txt:'Cita por confirmar'}); else if(c.con_asesora) t.push({k:'azul', txt:'Pidió asesora'});
+  if(c.falta_datos) t.push({k:'ambar', txt:'Pagó y faltan datos de envío o correo'});
   if(c.por_revisar) t.push({k:'ambar', txt:'Pago por revisar'});
   if(c.quiso_comprar && !c.tiene_pedido && min>=20) t.push({k:'ambar', txt:'Quería comprar y no quedó pedido'});
   return t;
