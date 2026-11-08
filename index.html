@@ -1235,7 +1235,7 @@ function etiquetasChat(c){
   const min = (Date.now()-new Date(c.ultimo_at).getTime())/60000;
   const texto = limpiarPreview(c.ultimo_texto);
   if(c.ultimo_rol==='user' && min>=3 && !c.con_asesora && !CIERRE_CHAT.test(texto)) t.push({k:'rojo', txt:'Sin respuesta · hace '+hace(c.ultimo_at)});
-  if(c.pidio_cita) t.push({k:'azul', txt:'Cita por confirmar'}); else if(c.con_asesora) t.push({k:'azul', txt:'Pidió asesora'});
+  if(c.pidio_cita) t.push({k:'azul', txt:'Cita: derivada a la asesora'}); else if(c.con_asesora) t.push({k:'azul', txt:'Derivada a la asesora'}); /* derivada-informativa */
   if(c.falta_datos) t.push({k:'ambar', txt:'Pagó y faltan datos de envío o correo'});
   if(c.por_revisar) t.push({k:'ambar', txt:'Pago por revisar'});
   if(c.quiso_comprar && !c.tiene_pedido && min>=20) t.push({k:'ambar', txt:'Quería comprar y no quedó pedido'});
@@ -1243,7 +1243,7 @@ function etiquetasChat(c){
 }
 function vistosGet(){ try{ return JSON.parse(localStorage.getItem('nf_chats_vistos')||'{}'); }catch(e){ return {}; } }
 function vistosSet(o){ try{ localStorage.setItem('nf_chats_vistos', JSON.stringify(o)); }catch(e){} }
-function esPendiente(c, vistos){ return etiquetasChat(c).length>0 && vistos[c.telefono]!==c.ultimo_at; }
+function esPendiente(c, vistos){ return etiquetasChat(c).some(t=>t.k!=='azul') && vistos[c.telefono]!==c.ultimo_at; }
 function diaLabel(iso){
   const d = new Date(iso), hoy = new Date(), ayer = new Date(hoy.getTime()-864e5);
   if(d.toDateString()===hoy.toDateString()) return 'Hoy';
