@@ -1587,9 +1587,11 @@ function App(){
   const [auth, setAuth] = useState(()=>{ try{ return sessionStorage.getItem('nf_ok')==='1' || (Date.now() - Number(localStorage.getItem('nf_ok_ts')||0) < 30*864e5); }catch(e){ return false; } });
   const [view, setView] = useState('inventario');
   const [chatsPend, setChatsPend] = useState(0);
+  const [pedPend, setPedPend] = useState(0); /* aviso-pedidos */
   useEffect(()=>{
     let vivo = true;
-    const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const c = await DB.chatsResumen(72); const v = vistosGet(); if(vivo) setChatsPend(c.filter(x=>esPendiente(x,v)).length); }catch(e){} };
+    const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const c = await DB.chatsResumen(72); const v = vistosGet(); if(vivo) setChatsPend(c.filter(x=>esPendiente(x,v)).length); }catch(e){}
+      try{ const ps = await DB.cargarPedidos(); const k = new Set(); ps.forEach(p=>{ const sinDatos = p.estado==='pidiendo_datos_envio' && !p.envio_direccion; const revisar = /^REVISAR:/.test(p.notas||'') && p.estado!=='cancelado'; const envio = p.estado==='listo_para_enviar' && envioDeuda(p); const espera = p.estado==='pendiente_confirmacion_humana'; if(sinDatos||revisar||envio||espera) k.add(p.grupo_id||p.id); }); if(vivo) setPedPend(k.size); }catch(e){} };
     f(); const t = setInterval(f, 90000);
     return ()=>{ vivo = false; clearInterval(t); };
   },[]);
@@ -1680,7 +1682,7 @@ function App(){
       {/* TABS */}
       <div className="tabs">
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
-        <button className={`tab ${view==='pedidos'?'on':''}`} onClick={()=>setView('pedidos')}>Pedidos vendidos</button>
+        <button className={`tab ${view==='pedidos'?'on':''}`} onClick={()=>setView('pedidos')}>Pedidos vendidos{pedPend>0 && <span className="tab-n">{pedPend}</span>}</button>
         <button className={`tab ${view==='chats'?'on':''}`} onClick={()=>setView('chats')}>Chats{chatsPend>0 && <span className="tab-n">{chatsPend}</span>}</button>
         <button className={`tab ${view==='historial'?'on':''}`} onClick={()=>setView('historial')}>Historial</button>
         <button className={`tab ${view==='live'?'on':''}`} onClick={()=>setView('live')}>Live</button>
