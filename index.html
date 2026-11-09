@@ -1629,6 +1629,7 @@ function App(){
         <button className={`tab ${view==='chats'?'on':''}`} onClick={()=>setView('chats')}>Chats{chatsPend>0 && <span className="tab-n">{chatsPend}</span>}</button>
         <button className={`tab ${view==='historial'?'on':''}`} onClick={()=>setView('historial')}>Historial</button>
         <button className={`tab ${view==='live'?'on':''}`} onClick={()=>setView('live')}>Live</button>
+        <a className="tab" href="/etiquetas/" style={{textDecoration:'none'}}>Etiquetas</a> {/* enlace-etiquetas */}
       </div>
 
       {view==='pedidos' ? <PedidosView productos={prods}/> : view==='chats' ? <ChatsView onPend={setChatsPend}/> : view==='historial' ? <HistorialView productos={prods} filtro={histProd} setFiltro={setHistProd}/> : view==='live' ? <LiveView productos={prods}/> : <>

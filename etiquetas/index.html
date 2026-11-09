@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="theme-color" content="#C4728A"/>
+<title>Nova Floe — Etiquetas para la impresora térmica</title>
+<link rel="icon" href="/icon-192.png"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;1,400&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --blush:#E8A4B4; --blush-d:#C4728A; --blush-dd:#9A4A62; --blush-l:#FBF0F3; --blush-m:#F2D0DA;
+  --night:#1A1118; --night-2:#3D2E38; --night-3:#7A6070; --mist:#F7F2F4; --white:#FFFFFF; --border:#EDD8E0;
+  --green:#3D7A5A; --green-l:#E4F2EB; --amber:#B07820; --amber-l:#FBF0D8; --red:#C03040; --red-l:#FCEAEC;
+  --body:'DM Sans',sans-serif; --display:'Playfair Display',serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--body);background:var(--mist);color:var(--night);min-height:100vh;-webkit-font-smoothing:antialiased}
+.top{background:var(--white);border-bottom:1px solid var(--border);padding:14px 1.25rem;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{font-family:var(--display);font-size:22px}
+.brand em{color:var(--blush-d)}
+.volver{font-size:15px;font-weight:600;color:var(--blush-dd);text-decoration:none;border:2px solid var(--border);border-radius:12px;padding:10px 14px}
+main{max-width:980px;margin:0 auto;padding:1.25rem 1.25rem 7rem}
+h1{font-size:26px;line-height:1.2;margin-bottom:6px}
+.sub{font-size:17px;color:var(--night-3);line-height:1.45;margin-bottom:18px}
+.card{background:var(--white);border:2px solid var(--border);border-radius:16px;padding:16px 18px;margin-bottom:14px}
+.card h2{font-size:18px;margin-bottom:10px}
+.fila{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.campo{display:flex;flex-direction:column;gap:6px;min-width:150px;flex:1}
+.campo label{font-size:14px;font-weight:600;color:var(--night-3)}
+select,input[type=number]{font-family:inherit;font-size:17px;padding:12px 12px;border:2px solid var(--border);border-radius:12px;background:var(--white);color:var(--night)}
+select:focus,input:focus{outline:none;border-color:var(--blush-d)}
+.chk{display:flex;gap:10px;align-items:center;font-size:16px;margin-top:12px;cursor:pointer}
+.chk input{width:22px;height:22px;accent-color:var(--blush-d)}
+.nota{font-size:14px;color:var(--night-3);margin-top:8px;line-height:1.4}
+.zona{border:3px dashed var(--blush);background:var(--blush-l);border-radius:18px;padding:30px 18px;text-align:center;cursor:pointer;margin-bottom:14px;transition:.15s}
+.zona.sobre{background:var(--blush-m);border-color:var(--blush-d)}
+.zona b{display:block;font-size:20px;margin-bottom:6px}
+.zona span{font-size:16px;color:var(--night-3)}
+.btn{border:none;border-radius:14px;padding:15px 20px;font-size:18px;font-weight:700;cursor:pointer;font-family:inherit;min-height:52px}
+.btn.ok{background:var(--green);color:#fff}
+.btn.rosa{background:var(--blush-d);color:#fff}
+.btn.sec{background:var(--white);border:2px solid var(--border);color:var(--night-2)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.chico{padding:10px 14px;font-size:15px;min-height:44px;border-radius:12px}
+.lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px}
+.et{background:var(--white);border:2px solid var(--border);border-radius:16px;padding:14px}
+.et.fuera{opacity:.5}
+.et-top{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px}
+.et-nombre{font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.et-cuerpo{display:flex;gap:12px;align-items:flex-start}
+.vista{flex:1;min-width:0}
+.vista canvas{width:100%;height:auto;border-radius:10px;border:1px solid var(--border);touch-action:none;display:block;background:#fff}
+.res{width:132px;flex:none}
+.res canvas{width:100%;height:auto;border:2px solid var(--night-2);border-radius:6px;display:block;background:#fff}
+.res p,.vista p{font-size:12px;color:var(--night-3);margin-top:5px;line-height:1.3}
+.et-acc{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.barra{position:fixed;left:0;right:0;bottom:0;background:var(--white);border-top:2px solid var(--border);padding:12px 1.25rem;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;z-index:5}
+.barra .info{align-self:center;font-size:15px;color:var(--night-3);font-weight:600}
+.aviso{background:var(--amber-l);color:#7a5410;border-radius:12px;padding:12px 14px;font-size:16px;line-height:1.4;margin-bottom:14px}
+.error{background:var(--red-l);color:var(--red)}
+.pasos{font-size:16px;line-height:1.6;color:var(--night-2);padding-left:20px}
+details summary{cursor:pointer;font-weight:700;font-size:17px}
+#toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);background:var(--night);color:#fff;padding:12px 18px;border-radius:12px;font-size:16px;z-index:50;display:none}
+#printArea{display:none}
+@media(max-width:520px){.lista{grid-template-columns:1fr}.et-cuerpo{flex-direction:column}.res{width:140px;align-self:center}}
+@media print{
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{display:block;position:absolute;left:0;top:0}
+  #printArea img{display:block;page-break-after:always;break-after:page}
+  #printArea img:last-child{page-break-after:auto;break-after:auto}
+}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand">Nova <em>Floe</em></div>
+  <a class="volver" href="/">← Volver al inventario</a>
+</div>
+<main>
+  <h1>Etiquetas para la impresora térmica</h1>
+  <p class="sub">Sube las guías de Skydropx (PDF o foto). La página <b>recorta la etiqueta sola</b> y la deja del tamaño exacto de tu impresora, lista para imprimir. Todo se hace en tu navegador: las guías <b>no se suben a ningún servidor</b>.</p>
+
+  <div class="card" id="ajustes">
+    <h2>1. Tamaño de tu etiqueta</h2>
+    <div class="fila">
+      <div class="campo">
+        <label for="tam">Papel de la impresora</label>
+        <select id="tam">
+          <option value="101.6x152.4">4 × 6 pulgadas (10 × 15 cm) — el más común</option>
+          <option value="100x150">100 × 150 mm</option>
+          <option value="100x100">100 × 100 mm (cuadrada)</option>
+          <option value="custom">Otro tamaño…</option>
+        </select>
+      </div>
+      <div class="campo" id="cAncho" style="display:none"><label for="ancho">Ancho (mm)</label><input id="ancho" type="number" min="30" max="110" step="0.1" value="100"/></div>
+      <div class="campo" id="cAlto" style="display:none"><label for="alto">Alto (mm)</label><input id="alto" type="number" min="30" max="300" step="0.1" value="150"/></div>
+      <div class="campo" style="max-width:170px"><label for="margen">Borde blanco (mm)</label><input id="margen" type="number" min="0" max="10" step="0.5" value="2"/></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="contraste"/> Aumentar contraste (blanco y negro puro, útil si la guía sale gris o borrosa)</label>
+    <p class="nota">Tu impresora JADENS acepta etiquetas de entre 40 y 104 mm de ancho; el tamaño estándar para guías de envío es 4 × 6 pulgadas.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Sube las guías</h2>
+    <div class="zona" id="zona" tabindex="0" role="button" aria-label="Elegir archivos">
+      <b>Toca aquí o arrastra tus guías</b>
+      <span>PDF, foto o captura de pantalla. Puedes subir varias a la vez, o pegar una imagen con Ctrl + V.</span>
+    </div>
+    <input type="file" id="archivos" accept="application/pdf,image/*" multiple style="display:none"/>
+    <div id="aviso"></div>
+    <p class="nota">Cada página de un PDF se convierte en una etiqueta. Si el recorte automático no queda perfecto, arrastra las esquinas del cuadro rosado sobre la guía para ajustarlo.</p>
+  </div>
+
+  <div id="lista" class="lista"></div>
+
+  <div class="card" style="margin-top:14px">
+    <details>
+      <summary>Cómo imprimir sin que salga chiquito</summary>
+      <ol class="pasos" style="margin-top:10px">
+        <li>Toca <b>Imprimir</b>. Se abre la ventana de impresión.</li>
+        <li>En <b>Impresora</b> elige tu JADENS.</li>
+        <li>En <b>Tamaño de papel</b> elige el mismo de arriba (4 × 6 in o 100 × 150 mm).</li>
+        <li><b>Márgenes: ninguno</b> y <b>Escala: 100 %</b> (no uses "ajustar a la página").</li>
+        <li>Si usas el celular con la app de la impresora, toca <b>Descargar PDF</b> y ábrelo desde esa app.</li>
+      </ol>
+    </details>
+  </div>
+</main>
+
+<div class="barra" id="barra" style="display:none">
+  <span class="info" id="info"></span>
+  <button class="btn sec" id="btnLimpiar">Quitar todo</button>
+  <button class="btn rosa" id="btnPdf">Descargar PDF</button>
+  <button class="btn ok" id="btnImprimir">Imprimir</button>
+</div>
+<div id="toast"></div>
+<div id="printArea"></div>
+<style id="estiloPagina"></style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script>
+(function(){
+'use strict';
+const $ = id => document.getElementById(id);
+const items = [];           // una por pagina/foto: {id, nombre, canvas, crop:{x,y,w,h}, auto, flip, usar, thumb, vista, res}
+let siguienteId = 1;
+const DPI_RENDER = 250;     // calidad con la que se lee el PDF
+const DPI_SALIDA = 300;     // calidad de la etiqueta final
+const UMBRAL = 235;         // lo mas claro que todavia cuenta como "tinta"
+
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+function toast(t){ const e=$('toast'); e.textContent=t; e.style.display='block'; clearTimeout(toast.t); toast.t=setTimeout(()=>{e.style.display='none'},2600); }
+function aviso(t, malo){ $('aviso').innerHTML = t ? '<div class="aviso '+(malo?'error':'')+'">'+t+'</div>' : ''; }
+
+/* ---------- ajustes ---------- */
+function guardarAjustes(){ try{ localStorage.setItem('nf_etq', JSON.stringify({tam:$('tam').value, ancho:$('ancho').value, alto:$('alto').value, margen:$('margen').value, contraste:$('contraste').checked})); }catch(e){} }
+function cargarAjustes(){ try{ const j=JSON.parse(localStorage.getItem('nf_etq')||'null'); if(!j) return; if(j.tam) $('tam').value=j.tam; if(j.ancho) $('ancho').value=j.ancho; if(j.alto) $('alto').value=j.alto; if(j.margen!=null) $('margen').value=j.margen; $('contraste').checked=!!j.contraste; }catch(e){} }
+function etiqueta(){
+  const v = $('tam').value;
+  if (v==='custom') return { w: Math.max(30, Number($('ancho').value)||100), h: Math.max(30, Number($('alto').value)||150) };
+  const [w,h] = v.split('x').map(Number); return {w,h};
+}
+function margenMm(){ return Math.max(0, Math.min(10, Number($('margen').value)||0)); }
+function mostrarCustom(){ const c=$('tam').value==='custom'; $('cAncho').style.display=c?'flex':'none'; $('cAlto').style.display=c?'flex':'none'; }
+
+/* ---------- recorte automatico ---------- */
+function detectarRecorte(canvas){
+  const w=canvas.width, h=canvas.height;
+  const data = canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
+  const filas=new Uint32Array(h), cols=new Uint32Array(w);
+  for(let y=0;y<h;y++){ let o=y*w*4; for(let x=0;x<w;x++,o+=4){ if(data[o+3]>20 && (data[o]*0.299+data[o+1]*0.587+data[o+2]*0.114)<UMBRAL){ filas[y]++; cols[x]++; } } }
+  const MIN = Math.max(2, Math.round(Math.min(w,h)*0.0007));
+  let y0=0,y1=h-1,x0=0,x1=w-1;
+  while(y0<h && filas[y0]<MIN) y0++;
+  while(y1>y0 && filas[y1]<MIN) y1--;
+  while(x0<w && cols[x0]<MIN) x0++;
+  while(x1>x0 && cols[x1]<MIN) x1--;
+  if (y0>=y1 || x0>=x1) return null;
+  return {x:x0, y:y0, w:x1-x0+1, h:y1-y0+1};
+}
+function girarAuto(it){ const L=etiqueta(); return (it.crop.w>it.crop.h) !== (L.w>L.h); }
+function girado(it){ return girarAuto(it) !== !!it.flip; }
+
+/* ---------- componer la etiqueta final ---------- */
+function componer(it, dpi){
+  const L=etiqueta(), W=Math.round(L.w/25.4*dpi), H=Math.round(L.h/25.4*dpi), m=Math.round(margenMm()/25.4*dpi);
+  const out=document.createElement('canvas'); out.width=W; out.height=H;
+  const c=out.getContext('2d',{willReadFrequently:true}); c.fillStyle='#fff'; c.fillRect(0,0,W,H);
+  const cr=it.crop, rot=girado(it);
+  const dw = rot?cr.h:cr.w, dh = rot?cr.w:cr.h;
+  const esc=Math.min((W-2*m)/dw,(H-2*m)/dh);
+  c.imageSmoothingEnabled=true; c.imageSmoothingQuality='high';
+  c.save(); c.translate(W/2,H/2); if(rot) c.rotate(Math.PI/2);
+  c.drawImage(it.canvas, cr.x,cr.y,cr.w,cr.h, -esc*cr.w/2, -esc*cr.h/2, esc*cr.w, esc*cr.h);
+  c.restore();
+  if ($('contraste').checked){ const im=c.getImageData(0,0,W,H), d=im.data; for(let i=0;i<d.length;i+=4){ const v=(d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114)<185?0:255; d[i]=d[i+1]=d[i+2]=v; d[i+3]=255; } c.putImageData(im,0,0); }
+  return out;
+}
+
+/* ---------- tarjeta con vista previa y recorte editable ---------- */
+const AGARRE = 22;
+function dibujarVista(it){
+  const cv=it.vista, t=it.thumb, ctx=cv.getContext('2d');
+  cv.width=t.width; cv.height=t.height;
+  ctx.drawImage(t,0,0);
+  const s=t.width/it.canvas.width, r={x:it.crop.x*s,y:it.crop.y*s,w:it.crop.w*s,h:it.crop.h*s};
+  ctx.fillStyle='rgba(26,17,24,.45)';
+  ctx.fillRect(0,0,cv.width,r.y); ctx.fillRect(0,r.y+r.h,cv.width,cv.height-r.y-r.h);
+  ctx.fillRect(0,r.y,r.x,r.h); ctx.fillRect(r.x+r.w,r.y,cv.width-r.x-r.w,r.h);
+  ctx.strokeStyle='#C4728A'; ctx.lineWidth=Math.max(2,cv.width/220); ctx.strokeRect(r.x,r.y,r.w,r.h);
+  const hs=Math.max(8,cv.width/38); ctx.fillStyle='#C4728A';
+  [[r.x,r.y],[r.x+r.w,r.y],[r.x,r.y+r.h],[r.x+r.w,r.y+r.h]].forEach(([x,y])=>ctx.fillRect(x-hs/2,y-hs/2,hs,hs));
+}
+function dibujarRes(it){
+  const o=componer(it,90), cv=it.res; cv.width=o.width; cv.height=o.height; cv.getContext('2d').drawImage(o,0,0);
+}
+function refrescar(it){ dibujarVista(it); dibujarRes(it); }
+function punteroEnCanvas(cv,e){ const b=cv.getBoundingClientRect(); return {x:(e.clientX-b.left)*cv.width/b.width, y:(e.clientY-b.top)*cv.height/b.height}; }
+function activarArrastre(it){
+  const cv=it.vista; let modo=null, ini=null, cr0=null;
+  cv.addEventListener('pointerdown',e=>{
+    const p=punteroEnCanvas(cv,e), s=cv.width/it.canvas.width;
+    const r={x:it.crop.x*s,y:it.crop.y*s,w:it.crop.w*s,h:it.crop.h*s}, g=AGARRE*(cv.width/cv.getBoundingClientRect().width);
+    const cerca=(x,y)=>Math.abs(p.x-x)<g && Math.abs(p.y-y)<g;
+    if(cerca(r.x,r.y)) modo='tl'; else if(cerca(r.x+r.w,r.y)) modo='tr'; else if(cerca(r.x,r.y+r.h)) modo='bl'; else if(cerca(r.x+r.w,r.y+r.h)) modo='br';
+    else if(p.x>r.x&&p.x<r.x+r.w&&p.y>r.y&&p.y<r.y+r.h) modo='mover'; else modo=null;
+    if(modo){ ini=p; cr0={...it.crop}; cv.setPointerCapture(e.pointerId); e.preventDefault(); }
+  });
+  cv.addEventListener('pointermove',e=>{
+    if(!modo) return;
+    const p=punteroEnCanvas(cv,e), s=cv.width/it.canvas.width, dx=(p.x-ini.x)/s, dy=(p.y-ini.y)/s, W=it.canvas.width, H=it.canvas.height, MINP=40;
+    let {x,y,w,h}=cr0;
+    if(modo==='mover'){ x=Math.max(0,Math.min(W-w,x+dx)); y=Math.max(0,Math.min(H-h,y+dy)); }
+    else{
+      let x0=x,y0=y,x1=x+w,y1=y+h;
+      if(modo==='tl'||modo==='bl') x0=Math.max(0,Math.min(x1-MINP,x0+dx)); else x1=Math.min(W,Math.max(x0+MINP,x1+dx));
+      if(modo==='tl'||modo==='tr') y0=Math.max(0,Math.min(y1-MINP,y0+dy)); else y1=Math.min(H,Math.max(y0+MINP,y1+dy));
+      x=x0;y=y0;w=x1-x0;h=y1-y0;
+    }
+    it.crop={x:Math.round(x),y:Math.round(y),w:Math.round(w),h:Math.round(h)}; refrescar(it);
+  });
+  const fin=()=>{ modo=null; };
+  cv.addEventListener('pointerup',fin); cv.addEventListener('pointercancel',fin);
+}
+function crearTarjeta(it){
+  const d=document.createElement('div'); d.className='et'; d.id='et'+it.id;
+  d.innerHTML='<div class="et-top"><div class="et-nombre"></div><button class="btn sec chico" data-a="quitar">Quitar</button></div>'+
+    '<div class="et-cuerpo"><div class="vista"><canvas></canvas><p>Arrastra las esquinas rosadas para ajustar el recorte.</p></div>'+
+    '<div class="res"><canvas></canvas><p>Así saldrá impresa</p></div></div>'+
+    '<div class="et-acc"><button class="btn sec chico" data-a="girar">↻ Girar</button><button class="btn sec chico" data-a="auto">Recorte automático</button><button class="btn sec chico" data-a="todo">Página completa</button></div>';
+  d.querySelector('.et-nombre').textContent=it.nombre;
+  it.vista=d.querySelector('.vista canvas'); it.res=d.querySelector('.res canvas'); it.el=d;
+  d.addEventListener('click',e=>{
+    const a=e.target.getAttribute&&e.target.getAttribute('data-a'); if(!a) return;
+    if(a==='quitar'){ items.splice(items.indexOf(it),1); d.remove(); actualizarBarra(); }
+    if(a==='girar'){ it.flip=!it.flip; refrescar(it); }
+    if(a==='auto'){ it.crop={...it.auto}; it.flip=false; refrescar(it); }
+    if(a==='todo'){ it.crop={x:0,y:0,w:it.canvas.width,h:it.canvas.height}; refrescar(it); }
+  });
+  activarArrastre(it);
+  $('lista').appendChild(d);
+  refrescar(it);
+}
+function actualizarBarra(){
+  const n=items.length; $('barra').style.display=n?'flex':'none';
+  $('info').textContent=n+(n===1?' etiqueta lista':' etiquetas listas');
+}
+
+/* ---------- lectura de archivos ---------- */
+function miniatura(canvas){
+  const maxW=520, s=Math.min(1,maxW/canvas.width), t=document.createElement('canvas');
+  t.width=Math.round(canvas.width*s); t.height=Math.round(canvas.height*s);
+  const c=t.getContext('2d'); c.imageSmoothingQuality='high'; c.fillStyle='#fff'; c.fillRect(0,0,t.width,t.height); c.drawImage(canvas,0,0,t.width,t.height); return t;
+}
+function agregarPagina(canvas, nombre){
+  const auto=detectarRecorte(canvas);
+  if(!auto){ aviso('La página "'+nombre+'" parece estar en blanco; la salté.', true); return; }
+  const it={id:siguienteId++, nombre, canvas, auto, crop:{...auto}, flip:false};
+  it.thumb=miniatura(canvas); items.push(it); crearTarjeta(it);
+}
+async function leerPDF(file){
+  if(!window.pdfjsLib) throw new Error('No cargó el lector de PDF. Revisa tu internet y recarga la página.');
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
+  for(let n=1;n<=pdf.numPages;n++){
+    const page=await pdf.getPage(n), vp=page.getViewport({scale:DPI_RENDER/72});
+    const cv=document.createElement('canvas'); cv.width=Math.round(vp.width); cv.height=Math.round(vp.height);
+    const c=cv.getContext('2d',{willReadFrequently:true}); c.fillStyle='#fff'; c.fillRect(0,0,cv.width,cv.height);
+    await page.render({canvasContext:c, viewport:vp, intent:'print'}).promise; /* 'print' no depende de requestAnimationFrame: sigue aunque la pestaña esté en segundo plano */
+    agregarPagina(cv, file.name+(pdf.numPages>1?' · página '+n:''));
+  }
+}
+async function leerImagen(file){
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((ok,mal)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=()=>mal(new Error('No pude abrir la imagen "'+file.name+'".')); i.src=url; });
+    const cv=document.createElement('canvas'); cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+    const c=cv.getContext('2d',{willReadFrequently:true}); c.fillStyle='#fff'; c.fillRect(0,0,cv.width,cv.height); c.drawImage(img,0,0);
+    agregarPagina(cv, file.name||'imagen');
+  } finally { URL.revokeObjectURL(url); }
+}
+async function procesar(files){
+  aviso('');
+  const lista=[...files].filter(f=>/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name)||/^image\//.test(f.type));
+  if(!lista.length){ aviso('Ese archivo no es un PDF ni una imagen.', true); return; }
+  aviso('Leyendo '+lista.length+(lista.length===1?' archivo…':' archivos…'));
+  const errores=[];
+  for(const f of lista){ try{ if(/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name)) await leerPDF(f); else await leerImagen(f); }catch(e){ errores.push(e.message||String(e)); } }
+  aviso(errores.length?errores.join('<br>'):'', errores.length>0);
+  actualizarBarra();
+  if(!errores.length && items.length) toast('Listo: revisa el recorte y toca Imprimir');
+}
+
+/* ---------- salida: PDF e impresion ---------- */
+async function generarPDF(){
+  const {PDFDocument}=PDFLib, pdf=await PDFDocument.create(), L=etiqueta(), pw=L.w*72/25.4, ph=L.h*72/25.4;
+  for(const it of items){
+    const cv=componer(it,DPI_SALIDA);
+    const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+    const img=await pdf.embedPng(new Uint8Array(await blob.arrayBuffer()));
+    pdf.addPage([pw,ph]).drawImage(img,{x:0,y:0,width:pw,height:ph});
+  }
+  return pdf.save();
+}
+async function descargarPDF(){
+  if(!items.length) return;
+  const b=$('btnPdf'); b.disabled=true; b.textContent='Preparando…';
+  try{
+    const bytes=await generarPDF(), url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+    const a=document.createElement('a'); a.href=url; a.download='etiquetas-'+new Date().toISOString().slice(0,10)+'.pdf'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000); toast('PDF descargado');
+  }catch(e){ aviso('No pude crear el PDF: '+(e.message||e), true); }
+  b.disabled=false; b.textContent='Descargar PDF';
+}
+function imprimir(){
+  if(!items.length) return;
+  const L=etiqueta(), area=$('printArea'); area.innerHTML='';
+  $('estiloPagina').textContent='@page{size:'+L.w+'mm '+L.h+'mm;margin:0}';
+  items.forEach(it=>{ const img=new Image(); img.src=componer(it,DPI_SALIDA).toDataURL('image/png'); img.style.width=L.w+'mm'; img.style.height=L.h+'mm'; area.appendChild(img); });
+  const lanzar=()=>{ window.print(); };
+  const ultimas=[...area.querySelectorAll('img')]; Promise.all(ultimas.map(i=>i.decode?i.decode().catch(()=>{}):0)).then(lanzar);
+}
+window.addEventListener('afterprint',()=>{ $('printArea').innerHTML=''; $('estiloPagina').textContent=''; });
+
+/* ---------- eventos ---------- */
+const zona=$('zona'), input=$('archivos');
+zona.addEventListener('click',()=>input.click());
+zona.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); input.click(); } });
+input.addEventListener('change',()=>{ if(input.files.length) procesar(input.files); input.value=''; });
+['dragenter','dragover'].forEach(ev=>zona.addEventListener(ev,e=>{ e.preventDefault(); zona.classList.add('sobre'); }));
+['dragleave','drop'].forEach(ev=>zona.addEventListener(ev,e=>{ e.preventDefault(); zona.classList.remove('sobre'); }));
+zona.addEventListener('drop',e=>{ if(e.dataTransfer&&e.dataTransfer.files.length) procesar(e.dataTransfer.files); });
+document.addEventListener('paste',e=>{ const fs=[...(e.clipboardData&&e.clipboardData.files||[])]; if(fs.length) procesar(fs); });
+['tam','ancho','alto','margen','contraste'].forEach(id=>$(id).addEventListener('input',()=>{ mostrarCustom(); guardarAjustes(); items.forEach(refrescar); }));
+$('btnPdf').addEventListener('click',descargarPDF);
+$('btnImprimir').addEventListener('click',imprimir);
+$('btnLimpiar').addEventListener('click',()=>{ items.length=0; $('lista').innerHTML=''; aviso(''); actualizarBarra(); });
+cargarAjustes(); mostrarCustom();
+
+/* para pruebas: acceso interno */
+window.__etq={items,procesar,componer,generarPDF,detectarRecorte,etiqueta};
+})();
+</script>
+</body>
+</html>
