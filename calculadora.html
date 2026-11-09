@@ -194,6 +194,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     </section>
   </div>
 
+  <section id="copia">
+    <h2>Copia de seguridad</h2>
+    <p class="hint">Tus datos se guardan solo en este celular y navegador. Guarda una copia de vez en cuando; si cambias de celular o de enlace, la cargas aquí y todo vuelve.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="add" id="bkSave" type="button" style="flex:1;margin:0">Guardar copia</button>
+      <button class="add" id="bkLoad" type="button" style="flex:1;margin:0">Cargar copia</button>
+    </div>
+    <input type="file" id="bkFile" accept=".json,application/json" hidden>
+  </section>
   <div class="status" id="status"></div>
 <datalist id="invNombres"></datalist>
 </div>
@@ -360,6 +369,24 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   $("addProd").addEventListener("click",()=>{ const last = state.products[state.products.length-1] || {};
     state.products.push({id:uid(),name:"",units:last.units||0,cost:last.cost||0,price:last.price||0,wPrice:last.wPrice||0,wUnits:last.wUnits||0,pack:last.pack||0,extras:0,commission:last.commission||0,shipping:0,perMonth:last.perMonth||0,perMonthW:last.perMonthW||0}); renderProducts(); changed(); const c=$("products").lastElementChild; c.querySelector("input").focus(); });
 
+
+  /* ---------- copia de seguridad ---------- */
+  $("bkSave").addEventListener("click",()=>{
+    const blob=new Blob([JSON.stringify({novafloeCalc:1,fecha:new Date().toISOString(),state},null,1)],{type:"application/json"});
+    const u=URL.createObjectURL(blob), a=document.createElement("a");
+    a.href=u; a.download="calculadora-novafloe-"+todayISO()+".json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),2000);
+  });
+  $("bkLoad").addEventListener("click",()=>$("bkFile").click());
+  $("bkFile").addEventListener("change",async e=>{
+    const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f) return;
+    try{
+      const j=JSON.parse(await f.text()); const s=j&&j.state?j.state:j;
+      if(!s||!Array.isArray(s.fixed)||!Array.isArray(s.products)) throw new Error("formato");
+      if(!confirm("Esto reemplaza lo que hay ahora en este celular por la copia ("+s.products.length+" productos, "+((s.sales||[]).length)+" ventas). ¿Seguir?")) return;
+      localStorage.setItem(LS_KEY+"-antes-de-cargar", localStorage.getItem(LS_KEY)||"");
+      localStorage.setItem(LS_KEY, JSON.stringify(s)); location.reload();
+    }catch(err){ alert("Ese archivo no es una copia de la calculadora."); }
+  });
   /* ---------- ventas ---------- */
   const todayISO = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
   let saleType = "detal";
