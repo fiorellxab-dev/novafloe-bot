@@ -452,6 +452,7 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .ch-tag.rojo{background:var(--red-l);color:var(--red);}
 .ch-tag.ambar{background:var(--amber-l);color:var(--amber);}
 .ch-tag.azul{background:#E4ECF7;color:#2C5AA0;}
+.ch-tag.verde{background:#E3F1E8;color:#2F6B4A;}
 .ch-det{padding:0 0 2rem;}
 .ch-det-top{display:flex;gap:14px;align-items:center;padding:14px 1.25rem 4px;}
 .ch-det-quien{min-width:0;}
@@ -539,6 +540,15 @@ const DB = {
     if(m.error) throw m.error;
     const fotos = (f.error ? [] : (f.data||[])).map(x=>({id:'foto-'+x.id, rol:'assistant', contenido:'', foto_pie:x.pie||'', created_at:x.created_at}));
     return [...(m.data||[]), ...fotos].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  },
+  async chatPedidos(tel){ /* pedido-en-chat */
+    const [p, pr] = await Promise.all([
+      sb.from('nf_pedidos').select('id,estado,talla,cantidad,precio_total,producto_id,created_at,grupo_id,envio_nombre,envio_cedula,envio_telefono,envio_direccion,envio_ciudad,envio_email,monto_detectado').eq('cliente_telefono',tel).gte('created_at', new Date(Date.now()-7*864e5).toISOString()).order('created_at',{ascending:false}).limit(20),
+      sb.from('nf_productos').select('id,nombre')
+    ]);
+    if(p.error) throw p.error;
+    const nom = {}; (pr.data||[]).forEach(x=>{ nom[x.id]=String(x.nombre||'').trim(); });
+    return (p.data||[]).map(x=>({...x, producto:nom[x.producto_id]||'Producto'}));
   },
   async eliminar(id){
     const {error} = await sb.from('nf_productos').delete().eq('id',id);
@@ -1255,6 +1265,31 @@ function partirMensaje(contenido){
   return m ? {cita:m[1], texto:m[2]} : {cita:null, texto:String(contenido||'')};
 }
 
+const ESTADO_PEDIDO = {cuenta_enviada:['Esperando el pago','ambar'], pidiendo_datos_envio:['Pagó · faltan datos de envío','rojo'], listo_para_enviar:['Pagado · listo para enviar','verde'], cancelado:['Cancelado',''], reemplazado:['Reemplazado','']};
+function PedidoEnChat({tel}){
+  const [ps, setPs] = useState(null);
+  useEffect(()=>{
+    let vivo = true;
+    const cargar = ()=>DB.chatPedidos(tel).then(x=>{ if(vivo) setPs(x); }).catch(()=>{ if(vivo) setPs([]); });
+    cargar(); const t = setInterval(()=>{ if(document.visibilityState==='visible') cargar(); }, 10000);
+    return ()=>{ vivo=false; clearInterval(t); };
+  },[tel]);
+  const vivos = (ps||[]).filter(p=>p.estado!=='cancelado' && p.estado!=='reemplazado');
+  if(!vivos.length) return null;
+  const grupos = {}; vivos.forEach(p=>{ const k = p.grupo_id || p.id; (grupos[k] = grupos[k] || []).push(p); });
+  return <div style={{padding:'10px 1.25rem 0'}}>{Object.values(grupos).map((g,i)=>{
+    const p0 = g[0]; const [txt,k] = ESTADO_PEDIDO[p0.estado] || [p0.estado,''];
+    const total = g.reduce((a,p)=>a+Number(p.precio_total||0),0);
+    const campos = [['Nombre',p0.envio_nombre],['Cédula',p0.envio_cedula],['Teléfono',p0.envio_telefono],['Dirección',p0.envio_direccion],['Ciudad',p0.envio_ciudad],['Correo',p0.envio_email]];
+    const faltan = campos.filter(x=>!x[1]).length;
+    return <div key={i} style={{border:'1.5px solid var(--line,#EDD8E0)',borderRadius:14,padding:'10px 12px',marginBottom:8,background:'#fff'}}>
+      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className={'ch-tag '+k}>{txt}</span><b style={{fontSize:15}}>{g.map(p=>p.producto+' t'+p.talla+(p.cantidad>1?' x'+p.cantidad:'')).join(' + ')} · {'$'+total.toLocaleString('es-CO')}</b></div>
+      {(p0.estado==='pidiendo_datos_envio' || p0.estado==='listo_para_enviar') && <div style={{marginTop:8,fontSize:14,lineHeight:1.5}}>
+        <div style={{color:'var(--muted,#7a6670)',marginBottom:2}}>{faltan===campos.length ? 'El bot ya le pidió los datos y ella todavía no los ha mandado.' : (faltan ? 'Mandó una parte de los datos:' : 'Datos de envío completos:')}</div>
+        {campos.map(([n,v])=><div key={n}><span style={{color:'var(--muted,#7a6670)'}}>{n}: </span>{v ? <b>{v}</b> : <span style={{color:'var(--red,#b3261e)'}}>falta</span>}</div>)}
+      </div>}
+    </div>; })}</div>;
+}
 function ChatDetalle({c, onBack, atendido, onAtendido}){
   const [msgs, setMsgs] = useState(null);
   const finRef = useRef(null);
@@ -1286,6 +1321,7 @@ function ChatDetalle({c, onBack, atendido, onAtendido}){
         {num && <a className="pk-btn ok ch-wa" href={'https://wa.me/'+num} target="_blank" rel="noopener noreferrer">Escribirle por WhatsApp</a>}
         {!atendido && tags.length>0 && <button className="pk-btn sec" onClick={onAtendido}>Ya lo atendí</button>}
       </div>
+      <PedidoEnChat tel={c.telefono}/>
       <div className="ch-msgs">
         {msgs===null ? <div className="loading-page"><div className="spinner"/></div>
           : msgs.length===0 ? <div className="empty"><p style={{fontSize:18}}>No hay mensajes guardados de este chat.</p></div>
