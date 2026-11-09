@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calculadora Novafloe</title>
+<link rel="icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FBEAF1; --surface:#FFF6FA; --ink:#3D1A2B; --muted:#8C5E73;
+  --denim:#B23C6E; --stitch:#E58BB0; --line:#F0CDDC; --good:#2E7D5B; --bad:#B4413A;
+  --field:#FFFFFF;
+  color-scheme: light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#22131A; --surface:#2E1923; --ink:#F8E9F0; --muted:#C99FB3;
+    --denim:#F28DB6; --stitch:#E86A9E; --line:#4B2A3A; --good:#5CC497; --bad:#EF7B72;
+    --field:#25141C; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#22131A; --surface:#2E1923; --ink:#F8E9F0; --muted:#C99FB3;
+  --denim:#F28DB6; --stitch:#E86A9E; --line:#4B2A3A; --good:#5CC497; --bad:#EF7B72;
+  --field:#25141C; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
+.wrap{max-width:640px;margin:0 auto;padding:20px 16px 48px}
+header{padding:12px 4px 20px}
+h1{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:2.6rem;line-height:1;margin:0;color:var(--denim);letter-spacing:-.01em}
+h1 em{font-style:italic}
+.sub{color:var(--muted);margin:8px 0 0;font-size:.95rem}
+h2{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:1.7rem;margin:0 0 4px;color:var(--ink)}
+.hint{color:var(--muted);font-size:.88rem;margin:0 0 14px}
+section{background:var(--surface);border-radius:18px;padding:18px 16px;margin-bottom:16px;border:1px solid var(--line)}
+.row{display:grid;grid-template-columns:1fr 128px 36px;gap:8px;align-items:center;margin-bottom:8px}
+label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:4px;font-weight:500}
+input,select{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:10px;padding:10px 11px;min-width:0}
+input:focus,select:focus{outline:2px solid var(--stitch);outline-offset:1px;border-color:transparent}
+input.num{text-align:right;font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer;border-radius:10px}
+button:focus-visible{outline:2px solid var(--stitch);outline-offset:2px}
+.x{width:36px;height:40px;border:none;background:transparent;color:var(--muted);font-size:1.3rem;line-height:1}
+.x:hover{color:var(--bad)}
+.add{border:1.5px dashed var(--line);background:transparent;color:var(--denim);padding:10px 14px;width:100%;font-weight:600;margin-top:4px}
+.add:hover{border-color:var(--denim)}
+.total{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);margin-top:12px;padding-top:12px;font-weight:600}
+.total span:last-child{font-variant-numeric:tabular-nums}
+.prod{border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;background:var(--bg)}
+.prod-head{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.prod-head input{font-weight:600;font-size:1.05rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid .full{grid-column:1/-1}
+.res{margin-top:14px;border:1.5px dashed var(--stitch);border-radius:12px;padding:12px 14px;background:var(--surface)}
+.res dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:6px 12px}
+.res dt{color:var(--muted);font-size:.9rem}
+.res dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+.res .big{font-size:1.15rem;font-weight:700;color:var(--ink)}
+.pos{color:var(--good)!important}.neg{color:var(--bad)!important}
+.summary{background:var(--denim);color:#fff;border:none;position:relative;overflow:hidden}
+.summary::before{content:"";position:absolute;inset:7px;border:1.5px dashed rgba(255,255,255,.45);border-radius:13px;pointer-events:none}
+.summary h2{color:#fff}
+.summary .hint{color:rgba(255,255,255,.75)}
+.summary dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:8px 12px;position:relative}
+.summary dt{color:rgba(255,255,255,.8)}
+.summary dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.summary .hero{font-family:"Instrument Serif",Georgia,serif;font-size:2.6rem;font-weight:400;line-height:1.05;margin:6px 0 14px;position:relative;font-variant-numeric:tabular-nums}
+.summary .note{position:relative;font-size:.88rem;color:rgba(255,255,255,.85);margin:12px 0 0}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .summary{background:#7E2A52}}
+:root[data-theme="dark"] .summary{background:#7E2A52}
+.status{text-align:center;color:var(--muted);font-size:.8rem;margin-top:8px;min-height:1.2em}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:5px;margin-bottom:16px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+.tabs button,.seg button{flex:1;border:none;background:transparent;color:var(--muted);padding:10px;font-weight:600}
+.tabs button[aria-pressed="true"],.seg button[aria-pressed="true"]{background:var(--denim);color:var(--bg)}
+.seg{display:flex;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:14px}
+.primary{width:100%;border:none;background:var(--denim);color:var(--bg);padding:13px;font-weight:700;margin-top:14px}
+.smsg{text-align:center;color:var(--muted);font-size:.88rem;min-height:1.2em;margin:8px 0 0}
+.monthbar{display:flex;align-items:center;justify-content:space-between;margin:4px 2px 12px}
+.monthbar h2{margin:0;text-transform:capitalize}
+.icon{width:40px;height:40px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:1.3rem;line-height:1}
+.prog{position:relative;margin-top:14px;font-size:.9rem}
+.prog .top{display:flex;justify-content:space-between;color:rgba(255,255,255,.85)}
+.prog .bar{height:9px;background:rgba(255,255,255,.22);border-radius:6px;overflow:hidden;margin-top:6px}
+.prog .bar i{display:block;height:100%;background:#fff;border-radius:6px}
+.key{display:inline-block;width:10px;height:10px;border-radius:3px;margin:0 4px 0 10px;vertical-align:-1px}.key.d{background:var(--denim)}.key.m{background:var(--stitch)}
+#chart svg{display:block;width:100%;height:auto}
+.inv-row{margin-bottom:14px}.inv-top{display:flex;justify-content:space-between;gap:8px}
+.inv-top span:last-child{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.inv-bar{height:8px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:6px}.inv-bar i{display:block;height:100%;background:var(--stitch)}
+.sale{display:grid;grid-template-columns:1fr auto 32px;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.sale:last-child{border-bottom:none}
+.sale small{display:block;color:var(--muted);font-size:.82rem}
+.sale .amt{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.tag{font-size:.72rem;padding:2px 8px;border-radius:20px;border:1px solid var(--line);margin-left:6px;color:var(--muted);font-weight:500}
+.empty{color:var(--muted);text-align:center;padding:14px 0;margin:0}
+[hidden]{display:none!important}
+.mref{border-bottom:1px solid var(--line);padding:10px 0}
+.mref-top{display:grid;grid-template-columns:1fr 112px;gap:8px;align-items:center}
+.mref .mn{font-weight:600;overflow-wrap:anywhere}
+.tallas{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+.tallas label{margin:0;text-align:center;font-size:.75rem}
+.tallas input{text-align:center;padding:8px 2px;margin-top:2px}
+.mhead span{font-size:.8rem;color:var(--muted);font-weight:500}
+.mhead span:not(:first-child){text-align:right}
+@media (max-width:380px){.row{grid-template-columns:1fr 110px 32px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Calculadora <em>Novafloe</em></h1>
+    <p class="sub">Planea con tus costos y registra lo que vendes. Todo se guarda solo.</p>
+  </header>
+
+  <nav class="tabs" aria-label="Secciones">
+    <button type="button" id="tabPlan" aria-pressed="true">Plan</button>
+    <button type="button" id="tabSales" aria-pressed="false">Ventas</button>
+  </nav>
+
+  <div id="viewPlan">
+  <section class="summary" id="summary" aria-live="polite"></section>
+
+  <section>
+    <h2>Gastos fijos del mes</h2>
+    <p class="hint">Lo que pagas todos los meses venda o no venda: arriendo, servicios, internet, sueldos…</p>
+    <div id="fixed"></div>
+    <button class="add" id="addFixed">Agregar gasto fijo</button>
+    <div class="total"><span>Total al mes</span><span id="fixedTotal"></span></div>
+  </section>
+
+  <section>
+    <h2>Mercancía</h2>
+    <p class="hint">Un bloque por cada producto o tanda que compres.</p>
+    <div id="products"></div>
+    <button class="add" id="addProd">Agregar producto</button>
+  </section>
+  </div>
+
+  <div id="viewSales" hidden>
+    <section>
+      <h2>Registrar venta</h2>
+      <p class="hint" style="margin-bottom:10px">Cada venta <b>se descuenta sola del inventario</b> de Nova Floe; si la borras, las prendas vuelven. El nombre de la referencia debe ser el del inventario (al escribirlo te salen sugerencias).</p>
+      <div class="seg" id="sType" role="group" aria-label="Tipo de venta">
+        <button type="button" data-type="detal" aria-pressed="true">Detal</button>
+        <button type="button" data-type="mayor" aria-pressed="false">Por mayor</button>
+      </div>
+      <div class="grid" id="detalFields" hidden>
+        <div class="full"><label for="sProd">Producto</label><select id="sProd"></select></div>
+        <div><label for="sQty">Cantidad</label><input id="sQty" class="num" inputmode="numeric" value="1"></div>
+        <div><label for="sPrice">Precio por unidad</label><input id="sPrice" class="num" inputmode="numeric" placeholder="0"></div>
+      </div>
+      <div id="mayorBox">
+        <p class="hint" id="mHint">La clienta puede combinar referencias. Pon cuántas lleva de cada una.</p>
+        <div class="mref-top mhead"><span>Referencia y cantidad por talla</span><span>Precio c/u</span></div>
+        <div id="mItems"></div>
+        <div class="total"><span>Total del pedido</span><span id="mTotal"></span></div>
+      </div>
+      <div class="grid" style="margin-top:10px">
+        <div><label for="sDate">Fecha</label><input id="sDate" type="date"></div>
+        <div><label for="sNote">Nota (opcional)</label><input id="sNote" placeholder="Ej: clienta de Lorica"></div>
+      </div>
+      <button class="primary" id="sSave" type="button">Registrar venta</button>
+      <p class="smsg" id="sMsg" role="status"></p>
+    </section>
+
+    <div class="monthbar">
+      <button class="icon" type="button" id="mPrev" aria-label="Mes anterior">‹</button>
+      <h2 id="mLabel"></h2>
+      <button class="icon" type="button" id="mNext" aria-label="Mes siguiente">›</button>
+    </div>
+    <section class="summary" id="kpis" aria-live="polite"></section>
+    <section>
+      <h2>Ventas por día</h2>
+      <p class="hint"><span class="key d" style="margin-left:0"></span>Detal<span class="key m"></span>Por mayor</p>
+      <div id="chart"></div>
+    </section>
+    <section>
+      <h2>Inventario</h2>
+      <p class="hint">Lo que te queda de cada tanda, con todas las ventas registradas.</p>
+      <div id="inv"></div>
+    </section>
+    <section>
+      <h2>Ventas del mes</h2>
+      <div id="sList"></div>
+    </section>
+  </div>
+
+  <div class="status" id="status"></div>
+<datalist id="invNombres"></datalist>
+</div>
+
+<script>
+(function(){
+  const fmt = n => (n<0?"-":"") + "$" + Math.round(Math.abs(n)).toLocaleString("es-CO");
+  const pct = n => (isFinite(n)? n.toLocaleString("es-CO",{maximumFractionDigits:1}) : "0") + "%";
+  const parseMoney = s => { const d = String(s||"").replace(/[^\d]/g,""); return d? Number(d):0; };
+  const parseDec = s => { const v = parseFloat(String(s||"").replace(",",".").replace(/[^\d.]/g,"")); return isFinite(v)? v:0; };
+  const showMoney = n => n? Number(n).toLocaleString("es-CO") : "";
+  const uid = () => Math.random().toString(36).slice(2,9);
+
+  const DEFAULT = {
+    fixed:[{id:uid(),name:"Arriendo del local",value:0},{id:uid(),name:"Servicios",value:0}],
+    products:[{id:uid(),name:"Pretina Doblada",units:230,cost:40000,price:85000,wPrice:0,wUnits:0,pack:1460,extras:0,commission:0,shipping:0,perMonth:0,perMonthW:0}]
+  };
+  let state = JSON.parse(JSON.stringify(DEFAULT));
+  const LS_KEY = "novafloe-calc-v1";
+  try{ const s = localStorage.getItem(LS_KEY); if(s){ const p = JSON.parse(s); if(p && p.fixed && p.products) state = p; } }catch(e){}
+
+  const $ = id => document.getElementById(id);
+  const statusEl = $("status");
+
+  function lotPer(p){ return p.units>0 ? ((p.extras||0)+(p.shipping||0))/p.units : 0; }
+  function unitProfit(p, price){
+    if(price===undefined) price = p.price;
+    return price - p.cost - p.pack - price*((p.commission||0)/100) - lotPer(p);
+  }
+  function calcProduct(p){
+    const com = (p.commission||0)/100;
+    const w = Math.min(p.wUnits||0, p.units||0);
+    const r = Math.max((p.units||0) - w, 0);
+    const per = unitProfit(p, p.price);
+    const perW = unitProfit(p, p.wPrice||0);
+    const sales = r*p.price + w*(p.wPrice||0);
+    const investment = p.units*(p.cost+p.pack) + (p.extras||0) + (p.shipping||0);
+    const profit = sales*(1-com) - investment;
+    const avgCash = p.units>0 ? sales*(1-com)/p.units : 0;
+    const recover = avgCash>0 ? Math.ceil(investment/avgCash) : Infinity;
+    return {per, perW, hasW:(p.wPrice||0)>0, sales, investment, profit,
+      margin: p.price>0? per/p.price*100:0, marginW: p.wPrice>0? perW/p.wPrice*100:0, recover};
+  }
+
+  /* ---------- render ---------- */
+  function renderFixed(){
+    const box = $("fixed"); box.innerHTML = "";
+    state.fixed.forEach(f=>{
+      const r = document.createElement("div"); r.className="row";
+      r.innerHTML = `<input aria-label="Nombre del gasto" placeholder="Ej: Internet" value="">
+        <input class="num" aria-label="Valor mensual" inputmode="numeric" placeholder="$0" value="">
+        <button class="x" aria-label="Quitar gasto">×</button>`;
+      const [n,v,x] = r.children;
+      n.value = f.name; v.value = showMoney(f.value);
+      n.addEventListener("input",()=>{f.name=n.value; changed(false);});
+      v.addEventListener("input",()=>{f.value=parseMoney(v.value); changed(false);});
+      v.addEventListener("blur",()=>{v.value=showMoney(f.value);});
+      x.addEventListener("click",()=>{state.fixed=state.fixed.filter(o=>o!==f); renderFixed(); changed(false);});
+      box.appendChild(r);
+    });
+  }
+
+  const FIELDS = [
+    ["units","Unidades de la tanda","int"],
+    ["cost","Costo por unidad","money"],
+    ["price","Precio al detal","money"],
+    ["wPrice","Precio por mayor","money"],
+    ["wUnits","De la tanda, cuántas van por mayor","int"],
+    ["pack","Empaque por unidad","money"],
+    ["shipping","Envío de toda la mercancía (total)","money"],
+    ["commission","Comisión datáfono/pago (%)","dec"],
+    ["extras","Gastos extra de la tanda (fotos, sesión…)","money","full"],
+    ["perMonth","Ventas al detal al mes","int"],
+    ["perMonthW","Ventas por mayor al mes","int"]
+  ];
+
+  function renderProducts(){
+    const box = $("products"); box.innerHTML = "";
+    state.products.forEach(p=>{
+      const card = document.createElement("div"); card.className="prod";
+      const head = document.createElement("div"); head.className="prod-head";
+      head.innerHTML = `<input aria-label="Nombre del producto" placeholder="Nombre del producto" list="invNombres" autocomplete="off"><button class="x" aria-label="Quitar producto">×</button>`;
+      const [nm,del] = head.children; nm.value = p.name;
+      nm.addEventListener("input",()=>{p.name=nm.value; changed(false);});
+      del.addEventListener("click",()=>{ if(confirm("¿Quitar "+(p.name||"este producto")+"?")){ state.products=state.products.filter(o=>o!==p); renderProducts(); changed(false);} });
+      card.appendChild(head);
+
+      const grid = document.createElement("div"); grid.className="grid";
+      FIELDS.forEach(([k,lab,type,full])=>{
+        const w = document.createElement("div"); if(full) w.className="full";
+        const id = "f"+p.id+k;
+        w.innerHTML = `<label for="${id}">${lab}</label><input id="${id}" class="num" inputmode="${type==="dec"?"decimal":"numeric"}" placeholder="0">`;
+        const inp = w.querySelector("input");
+        inp.value = type==="money"? showMoney(p[k]) : (p[k]||"");
+        inp.addEventListener("input",()=>{ p[k] = type==="dec"? parseDec(inp.value) : parseMoney(inp.value); updateResult(card,p); changed(true); });
+        if(type==="money") inp.addEventListener("blur",()=>{inp.value=showMoney(p[k]);});
+        grid.appendChild(w);
+      });
+      card.appendChild(grid);
+      const res = document.createElement("div"); res.className="res"; card.appendChild(res);
+      updateResult(card,p);
+      box.appendChild(card);
+    });
+  }
+
+  function updateResult(card,p){
+    const c = calcProduct(p);
+    card.querySelector(".res").innerHTML = `<dl>
+      <dt>Ganancia por unidad al detal</dt><dd class="big ${c.per<0?"neg":"pos"}">${fmt(c.per)}</dd>
+      <dt>Margen al detal</dt><dd>${pct(c.margin)}</dd>
+      ${c.hasW?`<dt>Ganancia por unidad por mayor</dt><dd class="big ${c.perW<0?"neg":"pos"}">${fmt(c.perW)}</dd>
+      <dt>Margen por mayor</dt><dd>${pct(c.marginW)}</dd>`:""}
+      <dt>Inversión total</dt><dd>${fmt(c.investment)}</dd>
+      <dt>Si vendes todo</dt><dd>${fmt(c.sales)}</dd>
+      <dt>Ganancia de la tanda</dt><dd class="${c.profit<0?"neg":"pos"}">${fmt(c.profit)}</dd>
+      <dt>Recuperas la inversión al vender</dt><dd>${isFinite(c.recover)? c.recover+" und":"—"}</dd>
+    </dl>`;
+  }
+
+  function renderSummary(){
+    const fixed = state.fixed.reduce((a,f)=>a+(f.value||0),0);
+    $("fixedTotal").textContent = fmt(fixed);
+    let monthGain = 0, monthUnits = 0, sumPer = 0, n = 0;
+    state.products.forEach(p=>{
+      const per = unitProfit(p, p.price), perW = unitProfit(p, p.wPrice||0);
+      const hasW = (p.wPrice||0)>0;
+      monthGain += per*(p.perMonth||0) + (hasW? perW*(p.perMonthW||0):0);
+      monthUnits += (p.perMonth||0) + (hasW? (p.perMonthW||0):0);
+      if(p.price>0){ sumPer += per; n++; }
+    });
+    const net = monthGain - fixed;
+    const avgPer = monthUnits>0 ? monthGain/monthUnits : (n? sumPer/n : 0);
+    const need = avgPer>0 ? Math.ceil(fixed/avgPer) : null;
+    const el = $("summary");
+    let note;
+    if(monthUnits===0) note = "Pon cuántas esperas vender al mes en cada producto para ver tu ganancia real del mes.";
+    else if(net>=0) note = "Con ese ritmo cubres los gastos fijos y te queda ganancia.";
+    else note = "Con ese ritmo no alcanzas a cubrir los gastos fijos.";
+    el.innerHTML = `<h2>Tu mes</h2>
+      <p class="hint">Ganancia después de pagar gastos fijos</p>
+      <div class="hero">${fmt(net)}</div>
+      <dl>
+        <dt>Ganancia de lo que vendes</dt><dd>${fmt(monthGain)}</dd>
+        <dt>Gastos fijos</dt><dd>${fmt(-fixed)}</dd>
+        <dt>Unidades vendidas al mes</dt><dd>${monthUnits}</dd>
+        <dt>Mínimo para cubrir los fijos</dt><dd>${need!==null? need+" und/mes":"—"}</dd>
+      </dl>
+      <p class="note">${note}</p>`;
+  }
+
+  /* ---------- saving ---------- */
+  let db=null, docRef=null, saveTimer=null, dirty=false;
+  function changed(){ renderSummary(); dirty=true; clearTimeout(saveTimer); saveTimer=setTimeout(save,700); }
+  async function save(){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){}
+    if(docRef){
+      try{ await docRef.set({state:JSON.parse(JSON.stringify(state)), updated:Date.now()}); statusEl.textContent="Guardado"; }
+      catch(e){ statusEl.textContent="Guardado en este celular"; }
+    } else statusEl.textContent="Guardado en este celular";
+    dirty=false;
+  }
+
+  $("addFixed").addEventListener("click",()=>{ state.fixed.push({id:uid(),name:"",value:0}); renderFixed(); changed(); const ins=$("fixed").querySelectorAll(".row"); ins[ins.length-1].querySelector("input").focus(); });
+  $("addProd").addEventListener("click",()=>{ const last = state.products[state.products.length-1] || {};
+    state.products.push({id:uid(),name:"",units:last.units||0,cost:last.cost||0,price:last.price||0,wPrice:last.wPrice||0,wUnits:last.wUnits||0,pack:last.pack||0,extras:0,commission:last.commission||0,shipping:0,perMonth:last.perMonth||0,perMonthW:last.perMonthW||0}); renderProducts(); changed(); const c=$("products").lastElementChild; c.querySelector("input").focus(); });
+
+  /* ---------- ventas ---------- */
+  const todayISO = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+  let saleType = "detal";
+  let month = todayISO().slice(0,7);
+  const saleGain = s => s.qty*(s.price*(1-(s.com||0)) - (s.unitCost||0));
+  const fixedTotal = () => state.fixed.reduce((a,f)=>a+(f.value||0),0);
+  function msg(t, largo){ $("sMsg").textContent=t; clearTimeout(msg.t); msg.t=setTimeout(()=>{$("sMsg").textContent="";}, largo||3000); }
+
+  function setTab(t){
+    const s = t==="ventas";
+    $("viewPlan").hidden = s; $("viewSales").hidden = !s;
+    $("tabPlan").setAttribute("aria-pressed", String(!s));
+    $("tabSales").setAttribute("aria-pressed", String(s));
+    if(s) renderSales(); else { renderProducts(); renderSummary(); }
+  }
+  $("tabPlan").addEventListener("click",()=>{ location.hash="plan"; });
+  $("tabSales").addEventListener("click",()=>{ location.hash="ventas"; });
+  window.addEventListener("hashchange",()=>setTab(location.hash==="#ventas"?"ventas":"plan"));
+
+  function fillProductSelect(){
+    const sel=$("sProd"); const cur=sel.value; sel.innerHTML="";
+    state.products.forEach(p=>{ const o=document.createElement("option"); o.value=p.id; o.textContent=p.name||"Sin nombre"; sel.appendChild(o); });
+    if(state.products.some(p=>p.id===cur)) sel.value=cur;
+    if(!$("sPrice").dataset.touched) suggestPrice();
+  }
+  function suggestPrice(){
+    const p = state.products.find(p=>p.id===$("sProd").value);
+    const v = p ? (saleType==="mayor" ? (p.wPrice||0) : p.price) : 0;
+    $("sPrice").value = showMoney(v); delete $("sPrice").dataset.touched;
+  }
+  $("sProd").addEventListener("change",suggestPrice);
+  $("sPrice").addEventListener("input",()=>{ $("sPrice").dataset.touched="1"; });
+  $("sPrice").addEventListener("blur",()=>{ $("sPrice").value=showMoney(parseMoney($("sPrice").value)); });
+  $("sType").addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    saleType=b.dataset.type;
+    $("sType").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+    renderMayor();
+  });
+  $("sDate").value = todayISO();
+
+  const mSel = {};
+  const TALLAS = ["6","8","10","12","14"];
+  function renderMayor(){
+    const box=$("mItems"); box.innerHTML="";
+    $("mHint").textContent = saleType==="mayor" ? "El mayorista puede combinar referencias. Pon cuántas lleva de cada una." : "La clienta puede combinar referencias. Pon cuántas lleva de cada una.";
+    if(!state.products.length){ box.innerHTML='<p class="empty">Primero agrega productos en Plan.</p>'; mTotal(); return; }
+    state.products.forEach(p=>{
+      const def = saleType==="mayor" ? (p.wPrice||p.price||0) : (p.price||0);
+      const sel = mSel[p.id] || (mSel[p.id]={qty:0,sizes:{},price:def,type:saleType});
+      if(!sel.qty || sel.type!==saleType){ sel.price = def; sel.type = saleType; }
+      const r=document.createElement("div"); r.className="mref";
+      r.innerHTML=`<div class="mref-top"><span class="mn"></span><input class="num" inputmode="numeric" aria-label="Precio por unidad" placeholder="0"></div>
+        <div class="tallas">${TALLAS.map(t=>`<label>T${t}<input inputmode="numeric" placeholder="0" data-t="${t}" aria-label="Talla ${t}"></label>`).join("")}</div>`;
+      r.querySelector(".mn").textContent=p.name||"Sin nombre";
+      const pr=r.querySelector(".mref-top input"); pr.value=showMoney(sel.price);
+      r.querySelectorAll(".tallas input").forEach(q=>{
+        q.value = sel.sizes[q.dataset.t]||"";
+        q.addEventListener("input",()=>{ sel.sizes[q.dataset.t]=parseMoney(q.value); sel.qty=Object.values(sel.sizes).reduce((a,b)=>a+(b||0),0); mTotal(); });
+      });
+      pr.addEventListener("input",()=>{sel.price=parseMoney(pr.value); mTotal();});
+      pr.addEventListener("blur",()=>{pr.value=showMoney(sel.price);});
+      box.appendChild(r);
+    });
+    mTotal();
+  }
+  function mTotal(){
+    let u=0,t=0;
+    state.products.forEach(p=>{const s=mSel[p.id]; if(s&&s.qty){u+=s.qty;t+=s.qty*s.price;}});
+    const el=$("mTotal");
+    el.textContent = `${u} ${u===1?"prenda":"prendas"} · ${fmt(t)}`;
+    el.className = (saleType==="mayor" && u>0 && u<6) ? "neg" : "";
+  }
+
+  $("sSave").addEventListener("click",()=>{
+    const date = $("sDate").value || todayISO();
+    {
+      const items = state.products.filter(p=>mSel[p.id]&&mSel[p.id].qty>0);
+      if(!items.length){ msg("Pon cuántas lleva de cada referencia."); return; }
+      if(items.some(p=>!mSel[p.id].price)){ msg("Falta el precio en alguna referencia."); return; }
+      const order=uid(), note=$("sNote").value.trim(); let u=0;
+      items.forEach(p=>{ const s=mSel[p.id];
+        TALLAS.forEach(t=>{ const q=s.sizes[t]||0; if(!q) return; u+=q;
+          state.sales.push({id:uid(), order, date, pid:p.id, name:p.name||"Sin nombre", talla:t, type:saleType, qty:q, price:s.price,
+            unitCost:(p.cost||0)+(p.pack||0)+lotPer(p), com:(p.commission||0)/100, note}); }); });
+      syncInventario("descontar", state.sales.filter(x=>x.order===order));
+      Object.keys(mSel).forEach(k=>delete mSel[k]);
+      $("sNote").value=""; month=date.slice(0,7);
+      renderSales(); changed();
+      msg(`Venta ${saleType==="mayor"?"por mayor":"al detal"} registrada: ${u} ${u===1?"prenda":"prendas"}`);
+      return;
+    }
+    const p = state.products.find(p=>p.id===$("sProd").value);
+    const qty = parseMoney($("sQty").value), price = parseMoney($("sPrice").value);
+    if(!p){ msg("Primero agrega un producto en Plan."); return; }
+    if(!qty){ msg("Pon la cantidad."); return; }
+    if(!price){ msg("Pon el precio."); return; }
+    state.sales.push({id:uid(), date, pid:p.id, name:p.name||"Sin nombre", type:saleType, qty, price,
+      unitCost:(p.cost||0)+(p.pack||0)+lotPer(p), com:(p.commission||0)/100, note:$("sNote").value.trim()});
+    $("sQty").value="1"; $("sNote").value="";
+    month = date.slice(0,7);
+    renderSales(); changed();
+    msg("Venta registrada");
+  });
+  function shiftMonth(n){ const [y,m]=month.split("-").map(Number); const d=new Date(y,m-1+n,1); month=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); renderSales(); }
+  $("mPrev").addEventListener("click",()=>shiftMonth(-1));
+  $("mNext").addEventListener("click",()=>shiftMonth(1));
+
+  function renderSales(){
+    fillProductSelect();
+    renderMayor();
+    const [y,m]=month.split("-").map(Number);
+    $("mLabel").textContent = new Date(y,m-1,1).toLocaleDateString("es-CO",{month:"long",year:"numeric"});
+    const list = state.sales.filter(s=>s.date.slice(0,7)===month).sort((a,b)=>b.date.localeCompare(a.date));
+    let rev=0,gain=0,uD=0,uM=0;
+    list.forEach(s=>{ rev+=s.qty*s.price; gain+=saleGain(s); if(s.type==="mayor") uM+=s.qty; else uD+=s.qty; });
+    const fixed = fixedTotal();
+    const planUnits = state.products.reduce((a,p)=>a+(p.perMonth||0)+((p.wPrice||0)>0?(p.perMonthW||0):0),0);
+    const net = gain - fixed;
+    const pctOf = (a,b) => b>0 ? Math.min(100, a/b*100) : 0;
+    let prog = "";
+    if(planUnits>0) prog += `<div class="prog"><div class="top"><span>Unidades vs. plan</span><span>${uD+uM} de ${planUnits}</span></div><div class="bar"><i style="width:${pctOf(uD+uM,planUnits)}%"></i></div></div>`;
+    if(fixed>0) prog += `<div class="prog"><div class="top"><span>Gastos fijos cubiertos</span><span>${Math.round(gain>0?gain/fixed*100:0)}%</span></div><div class="bar"><i style="width:${pctOf(Math.max(gain,0),fixed)}%"></i></div></div>`;
+    $("kpis").innerHTML = `<h2>Resultado del mes</h2>
+      <p class="hint">Ganancia después de pagar gastos fijos</p>
+      <div class="hero">${fmt(net)}</div>
+      <dl>
+        <dt>Total vendido</dt><dd>${fmt(rev)}</dd>
+        <dt>Ganancia de lo vendido</dt><dd>${fmt(gain)}</dd>
+        <dt>Gastos fijos</dt><dd>${fmt(-fixed)}</dd>
+        <dt>Unidades al detal</dt><dd>${uD}</dd>
+        <dt>Unidades por mayor</dt><dd>${uM}</dd>
+      </dl>${prog}`;
+    drawChart(list, y, m);
+    renderInventory();
+    renderSaleList(list);
+  }
+
+  function drawChart(list, y, m){
+    const box=$("chart"); const days=new Date(y,m,0).getDate();
+    const d=Array.from({length:days},()=>({det:0,may:0}));
+    list.forEach(s=>{ const i=Number(s.date.slice(8,10))-1; if(d[i]) d[i][s.type==="mayor"?"may":"det"]+=s.qty*s.price; });
+    if(!list.length){ box.innerHTML='<p class="empty">Todavía no hay ventas en este mes.</p>'; return; }
+    const max=Math.max(1,...d.map(x=>x.det+x.may));
+    const W=620,H=190,L=4,B=22,T=8,bw=(W-L)/days,ch=H-B-T;
+    let out="";
+    d.forEach((x,i)=>{
+      const X=L+i*bw+1, w=Math.max(bw-2,1), hd=x.det/max*ch, hm=x.may/max*ch;
+      const tip=`${i+1}: detal ${fmt(x.det)}, por mayor ${fmt(x.may)}`;
+      out+=`<g><title>${tip}</title><rect x="${X}" y="${T}" width="${w}" height="${ch}" style="fill:transparent"/>`;
+      if(hd) out+=`<rect x="${X}" y="${H-B-hd}" width="${w}" height="${hd}" rx="2" style="fill:var(--denim)"/>`;
+      if(hm) out+=`<rect x="${X}" y="${H-B-hd-hm}" width="${w}" height="${hm}" rx="2" style="fill:var(--stitch)"/>`;
+      out+=`</g>`;
+      if(i===0 || (i+1)%5===0) out+=`<text x="${X+w/2}" y="${H-6}" text-anchor="middle" style="fill:var(--muted);font-size:11px">${i+1}</text>`;
+    });
+    out+=`<line x1="0" x2="${W}" y1="${H-B}" y2="${H-B}" style="stroke:var(--line)"/>`;
+    box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Ventas por día del mes">${out}</svg>`;
+  }
+
+  function renderInventory(){
+    const box=$("inv"); box.innerHTML="";
+    if(!state.products.length){ box.innerHTML='<p class="empty">Agrega productos en Plan.</p>'; return; }
+    state.products.forEach(p=>{
+      const sold = state.sales.filter(s=>s.pid===p.id).reduce((a,s)=>a+s.qty,0);
+      const left = (p.units||0) - sold;
+      const row=document.createElement("div"); row.className="inv-row";
+      row.innerHTML=`<div class="inv-top"><span></span><span>${left} quedan de ${p.units||0}</span></div><div class="inv-bar"><i style="width:${p.units>0?Math.min(100,sold/p.units*100):0}%"></i></div>`;
+      row.querySelector("span").textContent = p.name||"Sin nombre";
+      box.appendChild(row);
+    });
+  }
+
+  function renderSaleList(list){
+    const box=$("sList"); box.innerHTML="";
+    if(!list.length){ box.innerHTML='<p class="empty">Registra la primera venta arriba.</p>'; return; }
+    const groups=[], seen={};
+    list.forEach(s=>{
+      if(s.order){ if(!seen[s.order]){ seen[s.order]={order:s.order,items:[]}; groups.push(seen[s.order]); } seen[s.order].items.push(s); }
+      else groups.push({items:[s]});
+    });
+    groups.forEach(g=>{
+      const s=g.items[0];
+      const [yy,mm,dd]=s.date.split("-").map(Number);
+      const day=new Date(yy,mm-1,dd).toLocaleDateString("es-CO",{day:"numeric",month:"short"});
+      const tot=g.items.reduce((a,i)=>a+i.qty*i.price,0), gan=g.items.reduce((a,i)=>a+saleGain(i),0), und=g.items.reduce((a,i)=>a+i.qty,0);
+      const r=document.createElement("div"); r.className="sale";
+      r.innerHTML=`<div><strong class="n"></strong><span class="tag">${s.type==="mayor"?"Por mayor":"Detal"}</span><small class="d"></small></div>
+        <div class="amt">${fmt(tot)}<small>gan. ${fmt(gan)}</small></div>
+        <button class="x" aria-label="Borrar venta">×</button>`;
+      const multi = g.items.length>1;
+      r.querySelector(".n").textContent = multi ? (s.type==="mayor" ? "Pedido por mayor" : "Pedido al detal") : s.name;
+      r.querySelector(".d").textContent = multi
+        ? `${day}, ${und} prendas: ${g.items.map(i=>i.name+(i.talla?" T"+i.talla:"")+" ×"+i.qty).join(", ")}${s.note?" — "+s.note:""}`
+        : `${day}, ${s.talla?"T"+s.talla+", ":""}${s.qty} × ${fmt(s.price)}${s.note?" — "+s.note:""}`;
+      r.querySelector("button").addEventListener("click",()=>{ if(confirm("¿Borrar esta venta? Las prendas vuelven al inventario.")){ syncInventario("devolver", g.items); state.sales = g.order ? state.sales.filter(o=>o.order!==g.order) : state.sales.filter(o=>o!==s); renderSales(); changed(); } });
+      box.appendChild(r);
+    });
+  }
+
+  function renderAll(){
+    if(!Array.isArray(state.sales)) state.sales=[];
+    renderFixed(); renderProducts(); renderSummary();
+    if(!$("viewSales").hidden) renderSales();
+  }
+  renderAll();
+  setTab(location.hash==="#ventas"?"ventas":"plan");
+
+  /* ---------- conexión con el inventario (Supabase de Nova Floe) ---------- */
+  const SB_URL = "https://rkmhmzlbpbsdihuiofkv.supabase.co";
+  const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrbWhtemxicGJzZGlodWlvZmt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0NjcxNjQsImV4cCI6MjEwNzA0MzE2NH0.9FX6_K6Am7budpWgJG4X164lCH93Hl6XVssSqwmQVu8";   // clave pública (la misma de la app de inventario)
+  const QUEUE_KEY = "novafloe-inv-cola";
+  const getQueue = () => { try{ return JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]"); }catch(e){ return []; } };
+  const setQueue = q => { try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }catch(e){} };
+  const sbHeaders = () => ({"Content-Type":"application/json", "apikey":SB_KEY, "Authorization":"Bearer "+SB_KEY});
+  async function postInv(job){
+    const r = await fetch(SB_URL + "/rest/v1/rpc/nf_calc_aplicar", {method:"POST", headers:sbHeaders(),
+      body:JSON.stringify({p_pedido:job.data.pedido, p_accion:job.accion, p_items:job.data.items})});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    return r.json();
+  }
+  let flushing = false;
+  async function flushQueue(){
+    if(flushing) return false; flushing = true;
+    try{
+      const q = getQueue(), left = [], avisos = [];
+      for(const job of q){
+        try{
+          const res = await postInv(job);
+          if(res && res.no_encontrados && res.no_encontrados.length) avisos.push("No se descontó (no está en el inventario con ese nombre): " + res.no_encontrados.join(", ") + ". Revisa el nombre en Plan.");
+          if(res && res.sin_stock && res.sin_stock.length) avisos.push("Había menos stock del que vendiste: " + res.sin_stock.map(s=>s.nombre+" T"+s.talla+" (había "+s.habia+")").join(", ") + ". Quedó en 0; revisa el inventario.");
+        }catch(e){ left.push(job); }
+      }
+      setQueue(left);
+      statusEl.textContent = left.length ? left.length+" movimiento(s) pendiente(s) de pasar al inventario" : "Inventario al día";
+      if(avisos.length) msg(avisos.join(" "), 14000);
+      return left.length===0;
+    } finally { flushing = false; }
+  }
+  function syncInventario(accion, sales){
+    const data = { pedido: String(sales[0].order||sales[0].id), fecha: sales[0].date, tipo: sales[0].type,
+      items: sales.map(s=>({ referencia: s.name, talla: s.talla||null, cantidad: s.qty, precio: s.price })) };
+    const q = getQueue(); q.push({accion, data}); setQueue(q);
+    flushQueue().then(ok=>{ if(!ok) msg("Guardada, pero no se pudo descontar del inventario. Se reintenta solo.", 6000); });
+  }
+  async function cargarNombres(){
+    try{
+      const r = await fetch(SB_URL + "/rest/v1/nf_productos?select=nombre&order=nombre.asc", {headers:sbHeaders()});
+      if(!r.ok) return; const lista = await r.json();
+      const dl = document.getElementById("invNombres"); if(!dl) return; dl.innerHTML = "";
+      lista.forEach(p=>{ const o = document.createElement("option"); o.value = String(p.nombre||"").trim(); dl.appendChild(o); });
+    }catch(e){}
+  }
+  cargarNombres();
+  window.addEventListener("online", flushQueue);
+  if(getQueue().length) flushQueue();
+})();
+</script>
+</body>
+</html>
