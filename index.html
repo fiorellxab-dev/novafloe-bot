@@ -1096,7 +1096,7 @@ function agruparPedidos(rows){
   rows.forEach(r=>{ const k = [r.cliente_telefono||r.grupo_id||r.id, norm(r.envio_direccion), r.estado].join('|'); (g[k] = g[k] || []).push(r); });
   return Object.values(g).map(fs=>{ const base = fs.slice().sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at))[0]; return { id: fs.map(f=>f.id).join(','), filas: fs, base }; });
 }
-function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQuitarAviso}){
+function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQuitarAviso, puedeSky, subiendoSky, onSky}){
   const notaRev = (g.filas.map(f=>f.notas).find(n=>/^REVISAR:/.test(n||''))||'').replace(/^REVISAR:\s*/,'').split(' | ')[0];
   const b = g.base;
   const esRecoge = /^Recoge en tienda/i.test(b.envio_direccion||'');
@@ -1148,7 +1148,10 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
           {!b.envio_email && <div className="pk-falta" style={{marginTop:6,fontSize:16}}>Sin correo: pídeselo a la clienta antes de generar la guía.</div>}
         </div>
       ) : <div className="pk-falta">Todavía no mandó los datos de envío.</div>}
+      {g.filas.every(f=>f.skydropx_order_id) && <div className="pk-falta" style={{marginTop:10,background:'#E8F3EC',color:'#2F6B4C'}}>📤 <b>Ya está en Skydropx</b>{(()=>{ const t = g.filas.map(f=>f.skydropx_at).filter(Boolean).sort()[0]; return t ? ' (subido '+fechaAmable(t)+')' : ''; })()}. Compra e imprime la guía en Skydropx.</div>}
+      {!g.filas.every(f=>f.skydropx_order_id) && g.filas.some(f=>f.skydropx_error) && <div className="pk-falta" style={{marginTop:10}}>⚠️ <b>No se pudo subir a Skydropx:</b> {(g.filas.find(f=>f.skydropx_error)||{}).skydropx_error}</div>}
       <div className="pk-acciones">
+        {puedeSky && <button className="pk-btn sec" disabled={subiendoSky} onClick={onSky}>{subiendoSky?'Subiendo…':'📤 Subir a Skydropx'}</button>}
         {b.envio_direccion && !/^Recoge en tienda/i.test(b.envio_direccion) && <button className="pk-btn sec" onClick={copiar}>Copiar datos de envío</button>}
         {!esperando && !empacado && !deudaEnvio && !avisoJefa && b.estado!=='pidiendo_datos_envio' && <button className="pk-btn ok" onClick={()=>onMarcar(g,true)}>Ya empaqué este pedido</button>}
         {empacado && <button className="pk-btn sec" onClick={()=>onMarcar(g,false)}>Deshacer</button>}
@@ -1162,6 +1165,8 @@ function PedidosView({productos}){
   const [pedidos, setPedidos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState('listo');
+  const [subiendoSky, setSubiendoSky] = useState(false);
+  const [resSky, setResSky] = useState(null);
 
   useEffect(()=>{
     cargar();
@@ -1222,6 +1227,24 @@ function PedidosView({productos}){
       toast('Listo, anotado como revisado');
     }catch(e){ toast('No se pudo guardar: '+e.message); }
   }
+  /* skydropx (10-nov): subir los pedidos de afuera de Monteria como ORDENES (sin comprar guia). La jefa luego compra/imprime en Skydropx. */
+  const esParaSky = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && !x.empacado && !x.nota_jefa && !x.skydropx_order_id) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||'') && !g.filas.some(envioDeuda); };
+  async function subirSky(g){
+    if(subiendoSky) return;
+    const todos = !g;
+    const lista = todos ? porEmpacar.filter(esParaSky) : [g];
+    if(!lista.length){ toast('No hay pedidos de afuera para subir'); return; }
+    if(todos && !confirm('¿Subir '+lista.length+' pedido(s) de afuera de Montería a Skydropx?\n\nSe crean como órdenes (no se compra ninguna guía). Después compras e imprimes las guías en Skydropx.')) return;
+    setSubiendoSky(true); setResSky(null);
+    try{
+      const {data, error} = await sb.functions.invoke('skydropx', {body: todos ? {accion:'subir_todos'} : {accion:'subir', ids: g.filas.map(f=>f.id)}});
+      if(error) throw error;
+      setResSky(data);
+      toast((data && data.subidos ? data.subidos : 0)+' pedido(s) subido(s) a Skydropx');
+      setPedidos(await DB.cargarPedidos());
+    }catch(e){ toast('No se pudo subir: '+(e.message||e)); setResSky({ok:false, resultados:[{ok:false, nombre:'', error:String(e.message||e)}]}); }
+    setSubiendoSky(false);
+  }
   const porRevisar = agruparPedidos(pedidos.filter(p=>/^REVISAR:/.test(p.notas||'')));
   const faltanDatos = agruparPedidos(pedidos.filter(p=>p.estado==='pidiendo_datos_envio'));
   const listos = agruparPedidos(pedidos.filter(p=>p.estado==='listo_para_enviar'));
@@ -1252,12 +1275,19 @@ function PedidosView({productos}){
       {filtro==='datos' && <div className="pk-nota">Estas clientas <b>ya pagaron</b>, pero todavía no mandan sus datos de envío (o su correo). Escríbeles para que los manden. No se deben empacar hasta tener los datos.</div>}
       {filtro==='revisar' && <div className="pk-nota">Estos pagos se confirmaron solos, pero algo se veía raro (monto distinto, comprobante que no se pudo leer o referencia repetida). Verifícalos en el banco y toca <b>Ya lo revisé</b>.</div>}
       {filtro==='esperando' && <div className="pk-nota">Estos pedidos todavía <b>no se deben empacar</b>: el pago se está revisando. Cuando se confirme, pasan solos a "Listo para enviar".</div>}
+      {filtro==='listo' && (()=>{ const n = porEmpacar.filter(esParaSky).length; const ya = porEmpacar.filter(g=>g.filas.every(f=>f.skydropx_order_id)).length; return (n>0 || ya>0 || resSky) ? (
+        <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}>
+          <div><b>📤 Skydropx:</b> {n>0 ? <>{n} pedido(s) de afuera de Montería sin subir.</> : 'No hay pedidos de afuera pendientes de subir.'}{ya>0 && <> · {ya} ya está(n) en Skydropx.</>}</div>
+          {n>0 && <button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} disabled={subiendoSky} onClick={()=>subirSky(null)}>{subiendoSky?'Subiendo…':'Subir los '+n+' a Skydropx'}</button>}
+          <div style={{fontSize:14,marginTop:8,color:'var(--night-3)'}}>Se crean como órdenes en Skydropx (no se compra nada). Luego entras a Skydropx, compras las guías e imprimes. Los de Montería, los que recogen en tienda y los que tienen aviso rojo no se suben.</div>
+          {resSky && resSky.resultados && resSky.resultados.length>0 && <div style={{marginTop:8,fontSize:15}}>{resSky.resultados.map((r,i)=><div key={i}>{r.ok?'✅':'⚠️'} {r.nombre||''}{r.ok ? ' → '+(r.ciudad||'subido') : ': '+r.error}</div>)}</div>}
+        </div>) : null; })()}
       <div className="pedidos-list">
         {cargando
           ? <div className="loading-page"><div className="spinner"/></div>
           : lista.length===0
             ? <div className="empty"><p style={{fontSize:18}}>{vacio}</p></div>
-            : lista.map(g=><PedidoEmpaque key={g.id} g={g} productos={productos} onMarcar={marcar} onRevisado={revisado} onEnvioPagado={envioPagado} onQuitarAviso={quitarAviso}/>)
+            : lista.map(g=><PedidoEmpaque key={g.id} g={g} productos={productos} onMarcar={marcar} onRevisado={revisado} onEnvioPagado={envioPagado} onQuitarAviso={quitarAviso} puedeSky={esParaSky(g)} subiendoSky={subiendoSky} onSky={()=>subirSky(g)}/>)
         }
       </div>
     </div>
