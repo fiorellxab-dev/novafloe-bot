@@ -537,10 +537,10 @@ const DB = {
   async chatMensajes(tel){
     const [m, f] = await Promise.all([
       sb.from('nf_conversaciones').select('id,rol,contenido,created_at,media_url,foto_publica').eq('telefono',tel).order('created_at',{ascending:false}).limit(250),
-      sb.from('nf_fotos_enviadas').select('id,pie,created_at').eq('telefono',tel).order('created_at',{ascending:false}).limit(100)
+      sb.from('nf_fotos_enviadas').select('id,pie,created_at,url').eq('telefono',tel).order('created_at',{ascending:false}).limit(100)
     ]);
     if(m.error) throw m.error;
-    const fotos = (f.error ? [] : (f.data||[])).map(x=>({id:'foto-'+x.id, rol:'assistant', contenido:'', foto_pie:x.pie||'', created_at:x.created_at}));
+    const fotos = (f.error ? [] : (f.data||[])).map(x=>({id:'foto-'+x.id, rol:'assistant', contenido:'', foto_pie:x.pie||'', foto_url:x.url||'', created_at:x.created_at}));
     return [...(m.data||[]), ...fotos].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   },
   async chatPedidos(tel){ /* pedido-en-chat */
@@ -1355,7 +1355,7 @@ function ChatDetalle({c, onBack, atendido, onAtendido}){
               return <React.Fragment key={m.id}>{sep}
                 <div className={`ch-b ${m.rol==='assistant'?'assistant':'user'}`}>
                   {p.cita && <div className="ch-cita">↩ {p.cita.length>160 ? p.cita.slice(0,160)+'…' : p.cita}</div>}
-                  {m.foto_pie!==undefined ? <span className="ch-foto">📷 Foto enviada{m.foto_pie ? ': '+m.foto_pie : ''}</span> : (/^https?:/.test(m.foto_publica||'') ? <React.Fragment>{/* fotos-en-chat-v2 */}<a href={m.foto_publica} target="_blank" rel="noopener noreferrer"><img className="ch-img" src={m.foto_publica} loading="lazy" alt="Foto que mandó la clienta"/></a>{p.texto && !/^[envió una foto]/i.test(p.texto) && <div style={{marginTop:6}}>{p.texto}</div>}</React.Fragment> : (foto ? <span className="ch-foto">📷 Envió una foto</span> : p.texto))}
+                  {m.foto_pie!==undefined ? (/^https?:/.test(m.foto_url||'') ? <React.Fragment>{/* fotos-bot-en-chat */}<a href={m.foto_url} target="_blank" rel="noopener noreferrer"><img className="ch-img" src={m.foto_url} loading="lazy" alt={m.foto_pie||'Foto enviada por el bot'}/></a>{m.foto_pie && <div style={{marginTop:6,fontWeight:700}}>{m.foto_pie}</div>}</React.Fragment> : <span className="ch-foto">📷 Foto enviada{m.foto_pie ? ': '+m.foto_pie : ''}</span>) : (/^https?:/.test(m.foto_publica||'') ? <React.Fragment>{/* fotos-en-chat-v2 */}<a href={m.foto_publica} target="_blank" rel="noopener noreferrer"><img className="ch-img" src={m.foto_publica} loading="lazy" alt="Foto que mandó la clienta"/></a>{p.texto && !/^[envió una foto]/i.test(p.texto) && <div style={{marginTop:6}}>{p.texto}</div>}</React.Fragment> : (foto ? <span className="ch-foto">📷 Envió una foto</span> : p.texto))}
                   <span className="ch-h">{m.rol==='assistant'?'Bot · ':''}{new Date(m.created_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}</span>
                 </div></React.Fragment>;
             })}
