@@ -1458,6 +1458,11 @@ function ChatsView({onPend}){
   const [filtro, setFiltro] = useState('atender');
   const [abierto, setAbierto] = useState(null);
   const [vistos, setVistos] = useState(vistosGet());
+  const [busca, setBusca] = useState('');
+  const [largos, setLargos] = useState(null);
+  const [cargandoLargos, setCargandoLargos] = useState(false);
+  const largosAt = React.useRef(0);
+  async function cargarLargos(){ if(cargandoLargos || Date.now()-largosAt.current < 60000) return; largosAt.current = Date.now(); setCargandoLargos(true); try{ setLargos(await DB.chatsResumen(24*30)); }catch(e){} setCargandoLargos(false); }
   async function cargar(){
     try{ setChats(await DB.chatsResumen(72)); }
     catch(e){ toast('Error: '+e.message); setChats(prev=>prev||[]); }
@@ -1477,9 +1482,18 @@ function ChatsView({onPend}){
     return <ChatDetalle c={actual} onBack={()=>setAbierto(null)} atendido={vistos[actual.telefono]===actual.ultimo_at} onAtendido={()=>atender(actual)}/>;
   }
   const pend = (chats||[]).filter(c=>esPendiente(c,vistos));
-  const lista = filtro==='atender' ? pend : (chats||[]);
+  /* buscador-chats (10-nov): por nombre (sin importar tildes ni mayusculas) o por numero; al buscar mira hasta 30 dias atras */
+  const _nz = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+  const qTxt = _nz(busca), qDig = String(busca||'').replace(/\D/g,'');
+  const coincide = c => { if(!qTxt) return true; const nom = _nz(nombreChat(c)+' '+(c.nombre||'')); const dig = String(c.telefono||'').replace(/\D/g,'')+' '+String(c.telefono_real||'').replace(/\D/g,''); return (qTxt.length>=2 && qTxt.split(' ').every(w=>nom.includes(w))) || (qDig.length>=4 && dig.includes(qDig.startsWith('57')&&qDig.length>10 ? qDig.slice(2) : qDig)); };
+  const baseBusqueda = (largos && largos.length ? largos : (chats||[]));
+  const lista = qTxt ? baseBusqueda.filter(coincide) : (filtro==='atender' ? pend : (chats||[]));
   return (
     <div>
+      <div style={{padding:'12px 16px 0'}}>
+        <input className="ch-buscar" type="search" value={busca} onChange={e=>{ setBusca(e.target.value); if(e.target.value.trim().length>=2) cargarLargos(); }} placeholder="Buscar chat por nombre o número…" style={{width:'100%',boxSizing:'border-box',fontSize:17,padding:'12px 14px',borderRadius:14,border:'2px solid var(--border)',fontFamily:'inherit',background:'var(--white)'}}/>
+        {qTxt && <div style={{fontSize:14,color:'var(--night-3)',marginTop:6}}>{lista.length} {lista.length===1?'chat encontrado':'chats encontrados'} (últimos 30 días){cargandoLargos?' · buscando…':''} <button onClick={()=>setBusca('')} style={{marginLeft:8,border:'none',background:'none',color:'var(--blush-dd)',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:14}}>Borrar búsqueda</button></div>}
+      </div>
       <div className="pk-chips">
         <button className={`pk-chip ${filtro==='atender'?'on':''}`} onClick={()=>setFiltro('atender')}>Por atender ({pend.length})</button>
         <button className={`pk-chip ${filtro==='todos'?'on':''}`} onClick={()=>setFiltro('todos')}>Todos los chats ({(chats||[]).length})</button>
@@ -1487,7 +1501,7 @@ function ChatsView({onPend}){
       {filtro==='atender' && <div className="pk-nota">Aquí aparecen las clientas que escribieron y <b>no recibieron respuesta</b>, las que pidieron asesora, los pagos por revisar y las que querían comprar pero no quedó pedido (últimos 3 días). Toca un chat para leerlo.</div>}
       <div className="ch-list">
         {chats===null ? <div className="loading-page"><div className="spinner"/></div>
-          : lista.length===0 ? <div className="empty"><p style={{fontSize:18}}>{filtro==='atender' ? 'Todo al día: no hay clientas esperando.' : 'Todavía no hay chats en los últimos 3 días.'}</p></div>
+          : lista.length===0 ? <div className="empty"><p style={{fontSize:18}}>{qTxt ? (cargandoLargos ? 'Buscando…' : 'No encontré ningún chat con ese nombre o número en los últimos 30 días.') : filtro==='atender' ? 'Todo al día: no hay clientas esperando.' : 'Todavía no hay chats en los últimos 3 días.'}</p></div>
           : lista.map(c=>{
               const tags = etiquetasChat(c);
               const nombre = nombreChat(c);
