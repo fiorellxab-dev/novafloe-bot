@@ -1386,6 +1386,71 @@ function ChatDetalle({c, onBack, atendido, onAtendido}){
   );
 }
 
+/* ── CITAS (10-nov-2026): las citas que agenda el bot (nf_citas) ── */
+const hoyCO = (dias=0) => { const d = new Date(new Date().toLocaleString('en-US',{timeZone:'America/Bogota'})); d.setDate(d.getDate()+dias); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+function diaCita(f){
+  if(!f) return 'Día por confirmar';
+  if(f===hoyCO(0)) return 'HOY'; if(f===hoyCO(1)) return 'Mañana'; if(f===hoyCO(-1)) return 'Ayer';
+  const d = new Date(f+'T12:00:00'); const s = d.toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'}); return s.charAt(0).toUpperCase()+s.slice(1);
+}
+function CitaCard({c, onMarcar}){
+  const num = /^\d{10,13}@/.test(c.telefono||'') ? String(c.telefono).replace(/@.*/,'') : '';
+  const local = num ? (num.startsWith('57') ? num.slice(2) : num) : '';
+  const dia = diaCita(c.fecha); const esHoy = c.fecha===hoyCO(0); const pasada = c.fecha && c.fecha < hoyCO(0);
+  const etiqueta = {vino:'✓ Vino', no_vino:'✗ No vino', cancelada:'Cancelada'}[c.estado];
+  return (
+    <div className={`pk-card ${esHoy && c.estado==='pendiente'?'nuevo':''} ${c.estado!=='pendiente'?'hecho':''}`}>
+      <div className="pk-top">
+        <div className="pk-nombre">{c.nombre || 'Clienta'}{esHoy && c.estado==='pendiente' && <span className="pk-nuevo">HOY</span>}</div>
+        {etiqueta && <div className="pk-fecha"><b>{etiqueta}</b></div>}
+      </div>
+      <div className="pk-items">
+        <div className="pk-item"><b>{dia}</b>{c.hora ? <> · <b>{c.hora}</b></> : ' · hora por confirmar'}</div>
+      </div>
+      <div className="pk-envio">
+        <div className="f"><span>Para qué</span><span>{c.motivo || 'visita al punto físico'}</span></div>
+        <div className="f"><span>Teléfono</span><span>{local ? <a href={'https://wa.me/'+num} target="_blank" rel="noopener">{local}</a> : 'Ver en Chats (WhatsApp no mostró el número)'}</span></div>
+        {c.cuando_texto && <div className="f"><span>Lo que dijo</span><span style={{fontWeight:400}}>{c.cuando_texto}</span></div>}
+      </div>
+      {pasada && c.estado==='pendiente' && <div className="pk-falta" style={{marginTop:10}}>Esta cita ya pasó: márcala como "Vino" o "No vino".</div>}
+      <div className="pk-acciones">
+        {c.estado==='pendiente' ? <>
+          <button className="pk-btn ok" onClick={()=>onMarcar(c,'vino')}>Vino</button>
+          <button className="pk-btn sec" onClick={()=>onMarcar(c,'no_vino')}>No vino</button>
+          <button className="pk-btn sec" onClick={()=>onMarcar(c,'cancelada')}>Cancelada</button>
+        </> : <button className="pk-btn sec" onClick={()=>onMarcar(c,'pendiente')}>Volver a pendiente</button>}
+      </div>
+    </div>
+  );
+}
+function CitasView({onPend}){
+  const [citas, setCitas] = useState(null);
+  const [verHist, setVerHist] = useState(false);
+  const cargar = async ()=>{ try{ const {data, error} = await sb.from('nf_citas').select('*').order('fecha',{ascending:true, nullsFirst:false}).order('created_at',{ascending:true}).limit(400); if(!error) setCitas(data||[]); }catch(e){} };
+  useEffect(()=>{ cargar(); const t = setInterval(()=>{ if(document.visibilityState==='visible') cargar(); }, 45000); return ()=>clearInterval(t); },[]);
+  const marcar = async (c, estado)=>{ try{ await sb.from('nf_citas').update({estado, updated_at:new Date().toISOString()}).eq('id', c.id); toast(estado==='pendiente'?'Cita pendiente otra vez':'Cita marcada'); cargar(); }catch(e){ toast('No se pudo guardar'); } };
+  if(!citas) return <div className="pedidos-list"><div className="pk-falta">Cargando citas…</div></div>;
+  const pend = citas.filter(c=>c.estado==='pendiente');
+  const hoy = hoyCO(0), man = hoyCO(1);
+  const grupos = [
+    ['Ya pasaron (márcalas)', pend.filter(c=>c.fecha && c.fecha<hoy)],
+    ['Hoy', pend.filter(c=>c.fecha===hoy)],
+    ['Mañana', pend.filter(c=>c.fecha===man)],
+    ['Próximas', pend.filter(c=>c.fecha && c.fecha>man)],
+    ['Día por confirmar', pend.filter(c=>!c.fecha)]
+  ].filter(g=>g[1].length);
+  const hist = citas.filter(c=>c.estado!=='pendiente').sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)));
+  return (
+    <div className="pedidos-list">
+      <div className="pk-falta" style={{background:'#F7F3F5',color:'var(--night-2)'}}>Aquí salen las citas que agenda el bot: quién viene, qué día, a qué hora y su número. Punto físico: Cra 19W #15-22, Vallejo · 10 a 12 y 3 a 6.</div>
+      {!grupos.length && <div className="pk-falta">No hay citas pendientes.</div>}
+      {grupos.map(([t, l])=> <React.Fragment key={t}><div className="pk-envio" style={{background:'transparent',padding:'6px 2px 0'}}><div className="t">{t} ({l.length})</div></div>{l.map(c=> <CitaCard key={c.id} c={c} onMarcar={marcar}/>)}</React.Fragment>)}
+      {hist.length>0 && <button className="pk-btn sec" style={{flex:'none'}} onClick={()=>setVerHist(!verHist)}>{verHist?'Ocultar':'Ver'} citas anteriores ({hist.length})</button>}
+      {verHist && hist.slice(0,60).map(c=> <CitaCard key={c.id} c={c} onMarcar={marcar}/>)}
+    </div>
+  );
+}
+
 function ChatsView({onPend}){
   const [chats, setChats] = useState(null);
   const [filtro, setFiltro] = useState('atender');
@@ -1611,6 +1676,8 @@ function App(){
   const [view, setView] = useState('inventario');
   const [chatsPend, setChatsPend] = useState(0);
   const [pedPend, setPedPend] = useState(0); /* aviso-pedidos */
+  const [citasPend, setCitasPend] = useState(0); /* citas */
+  useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_citas').select('fecha').eq('estado','pendiente').lte('fecha', hoyCO(1)); if(vivo) setCitasPend((data||[]).length); }catch(e){} }; f(); const t = setInterval(f, 60000); return ()=>{ vivo = false; clearInterval(t); }; },[]);
   const [alertaEnt, setAlertaEnt] = useState(null); /* alerta-entrega */
   useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_bot_estado').select('alerta_entrega,alerta_entrega_at,alerta_sin_respuesta,alerta_sin_respuesta_at').eq('id',1).single(); if(vivo) setAlertaEnt(data && (data.alerta_entrega || data.alerta_sin_respuesta) ? data : null); }catch(e){} }; f(); const t = setInterval(f, 45000); const v = ()=>{ if(document.visibilityState==='visible') f(); }; document.addEventListener('visibilitychange', v); return ()=>{ vivo = false; clearInterval(t); document.removeEventListener('visibilitychange', v); }; },[]);
   useEffect(()=>{
@@ -1711,13 +1778,14 @@ function App(){
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
         <button className={`tab ${view==='pedidos'?'on':''}`} onClick={()=>setView('pedidos')}>Pedidos vendidos{pedPend>0 && <span className="tab-n">{pedPend}</span>}</button>
         <button className={`tab ${view==='chats'?'on':''}`} onClick={()=>setView('chats')}>Chats{chatsPend>0 && <span className="tab-n">{chatsPend}</span>}</button>
+        <button className={`tab ${view==='citas'?'on':''}`} onClick={()=>setView('citas')}>Citas{citasPend>0 && <span className="tab-n">{citasPend}</span>}</button>
         <button className={`tab ${view==='historial'?'on':''}`} onClick={()=>setView('historial')}>Historial</button>
         <button className={`tab ${view==='live'?'on':''}`} onClick={()=>setView('live')}>Live</button>
         <a className="tab" href="/etiquetas/" style={{textDecoration:'none'}}>Etiquetas</a> {/* enlace-etiquetas */}
         <a className="tab" href="/calculadora.html" style={{textDecoration:'none'}}>Calculadora</a> {/* enlace-calculadora */}
       </div>
 
-      {view==='pedidos' ? <PedidosView productos={prods}/> : view==='chats' ? <ChatsView onPend={setChatsPend}/> : view==='historial' ? <HistorialView productos={prods} filtro={histProd} setFiltro={setHistProd}/> : view==='live' ? <LiveView productos={prods}/> : <>
+      {view==='pedidos' ? <PedidosView productos={prods}/> : view==='chats' ? <ChatsView onPend={setChatsPend}/> : view==='citas' ? <CitasView/> : view==='historial' ? <HistorialView productos={prods} filtro={histProd} setFiltro={setHistProd}/> : view==='live' ? <LiveView productos={prods}/> : <>
 
       {/* STATS */}
       <div className="stats-bar">
