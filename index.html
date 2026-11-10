@@ -1229,7 +1229,9 @@ function PedidosView({productos}){
   const porCobrarEnvio = listos.filter(g=>g.filas.some(envioDeuda));
   const sinDeuda = listos.filter(g=>!g.filas.some(envioDeuda));
   const porEmpacar = sinDeuda.filter(g=>!g.filas.every(f=>f.empacado));
-  const empacados = sinDeuda.filter(g=>g.filas.every(f=>f.empacado));
+  /* empacados-ayer-y-hoy (10-nov): en "Ya empacados" solo se ven los de ayer y hoy (hora Colombia). Los demas siguen guardados en la base. */
+  const _desdeAyer = new Date(hoyCO(-1)+'T00:00:00-05:00').getTime();
+  const empacados = sinDeuda.filter(g=>g.filas.every(f=>f.empacado) && g.filas.some(f=>new Date(f.created_at).getTime() >= _desdeAyer));
   const esperando = agruparPedidos(pedidos.filter(p=>p.estado==='pendiente_confirmacion_humana'));
   const lista = filtro==='aviso' ? conAviso : filtro==='envio' ? porCobrarEnvio : filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : filtro==='datos' ? faltanDatos : empacados;
   const vacio = {listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.', esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.',revisar:'No hay pagos por revisar.',datos:'No hay clientas pendientes de mandar sus datos.'}[filtro];
@@ -1239,7 +1241,7 @@ function PedidosView({productos}){
       <div className="pk-chips">
         <button className={`pk-chip ${filtro==='listo'?'on':''}`} onClick={()=>setFiltro('listo')}>Listo para enviar ({porEmpacar.length})</button>
         <button className={`pk-chip ${filtro==='esperando'?'on':''}`} onClick={()=>setFiltro('esperando')}>Esperando confirmación ({esperando.length})</button>
-        <button className={`pk-chip ${filtro==='hechos'?'on':''}`} onClick={()=>setFiltro('hechos')}>Ya empacados ({empacados.length})</button>
+        <button className={`pk-chip ${filtro==='hechos'?'on':''}`} onClick={()=>setFiltro('hechos')}>Ya empacados ayer y hoy ({empacados.length})</button>
         {porRevisar.length>0 && <button className={`pk-chip ${filtro==='revisar'?'on':''}`} onClick={()=>setFiltro('revisar')}>Por revisar ({porRevisar.length})</button>}
         {conAviso.length>0 && <button className={`pk-chip ${filtro==='aviso'?'on':''}`} onClick={()=>setFiltro('aviso')} style={{background:'#FDE8E8',color:'#C0392B',fontWeight:700}}>⏸ Con aviso ({conAviso.length})</button>}
         {porCobrarEnvio.length>0 && <button className={`pk-chip ${filtro==='envio'?'on':''}`} onClick={()=>setFiltro('envio')}>Falta pagar envío ({porCobrarEnvio.length})</button>}
