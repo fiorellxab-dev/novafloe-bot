@@ -1533,8 +1533,9 @@ function LiveView({productos}){
   const activo = !!estado.modo_live;
   const pausado = !!estado.bot_pausado;
   const auto = !!estado.autoconfirmar;
-  const orden = Array.isArray(estado.orden_live) ? estado.orden_live : [];
   const porId = Object.fromEntries(productos.map(p=>[p.id,p]));
+  /* live-sin-borrados: si un producto del live se borro del inventario, se ignora para que la numeracion de la app y la del bot sean iguales */
+  const orden = (Array.isArray(estado.orden_live) ? estado.orden_live : []).filter(id=>porId[id]);
   const enLive = orden.map(id=>porId[id]).filter(Boolean);
   const disponibles = productos.filter(p=>Number(p.precio)>=1000 && !orden.includes(p.id));
 
@@ -1584,7 +1585,7 @@ function LiveView({productos}){
 
       <h3 style={{margin:'1.4rem 0 .3rem',fontSize:15}}>Jeans de este live (numerados)</h3>
       <p style={{fontSize:13,color:'var(--night-3)',marginBottom:'.7rem'}}>
-        Las clientas escriben "jean 1 talla 8". Muestra el número en pantalla (un cartel con "JEAN 1"). Marca "En pantalla" el que estás mostrando: si alguien escribe solo "quiero talla 8", el bot entiende que habla de ese.
+        Las clientas escriben "jean 1 talla 8". Muestra el número en pantalla (un cartel con "JEAN 1"). Si alguien escribe solo "quiero talla 8" sin decir el número, el bot le pregunta qué número de jean quiere (así nunca anota un jean equivocado). Por eso es importante que el número se vea en pantalla.
       </p>
       <div style={{display:'grid',gap:8}}>
         {enLive.length===0 && <div style={{fontSize:13,color:'var(--night-3)'}}>Aún no has agregado jeans al live. Agrégalos abajo, en el orden en que los vas a mostrar.</div>}
