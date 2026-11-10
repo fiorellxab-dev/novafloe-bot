@@ -466,6 +466,8 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .ch-h{display:block;font-size:12px;color:var(--night-3);margin-top:4px;text-align:right;}
 .ch-cita{border-left:3px solid var(--blush-d);background:rgba(0,0,0,.05);border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:14px;color:var(--night-3);}
 .ch-foto{font-weight:700;}
+.alerta-entrega{background:var(--red);color:#fff;font-size:16px;line-height:1.4;padding:12px 1.25rem;}
+.ch-img{display:block;max-width:100%;width:260px;max-height:340px;object-fit:cover;border-radius:12px;background:#eee;}
 .pk-revisar{background:var(--amber-l);color:#7a5410;border-radius:12px;padding:12px 14px;font-size:18px;line-height:1.35;margin-top:10px;}
 </style>
 </head>
@@ -1353,7 +1355,7 @@ function ChatDetalle({c, onBack, atendido, onAtendido}){
               return <React.Fragment key={m.id}>{sep}
                 <div className={`ch-b ${m.rol==='assistant'?'assistant':'user'}`}>
                   {p.cita && <div className="ch-cita">↩ {p.cita.length>160 ? p.cita.slice(0,160)+'…' : p.cita}</div>}
-                  {m.foto_pie!==undefined ? <span className="ch-foto">📷 Foto enviada{m.foto_pie ? ': '+m.foto_pie : ''}</span> : (foto ? <span className="ch-foto">📷 Envió una foto</span> : p.texto)}
+                  {m.foto_pie!==undefined ? <span className="ch-foto">📷 Foto enviada{m.foto_pie ? ': '+m.foto_pie : ''}</span> : (/^https?:/.test(m.media_url||'') && !/host.docker.internal|localhost/.test(m.media_url) ? <React.Fragment>{/* fotos-en-chat */}<a href={m.media_url} target="_blank" rel="noopener noreferrer"><img className="ch-img" src={m.media_url} loading="lazy" alt="Foto que mandó la clienta"/></a>{p.texto && !/^[envió una foto]/i.test(p.texto) && <div style={{marginTop:6}}>{p.texto}</div>}</React.Fragment> : (foto ? <span className="ch-foto">📷 Envió una foto</span> : p.texto))}
                   <span className="ch-h">{m.rol==='assistant'?'Bot · ':''}{new Date(m.created_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}</span>
                 </div></React.Fragment>;
             })}
@@ -1588,6 +1590,8 @@ function App(){
   const [view, setView] = useState('inventario');
   const [chatsPend, setChatsPend] = useState(0);
   const [pedPend, setPedPend] = useState(0); /* aviso-pedidos */
+  const [alertaEnt, setAlertaEnt] = useState(null); /* alerta-entrega */
+  useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_bot_estado').select('alerta_entrega,alerta_entrega_at').eq('id',1).single(); if(vivo) setAlertaEnt(data && data.alerta_entrega ? data : null); }catch(e){} }; f(); const t = setInterval(f, 45000); const v = ()=>{ if(document.visibilityState==='visible') f(); }; document.addEventListener('visibilitychange', v); return ()=>{ vivo = false; clearInterval(t); document.removeEventListener('visibilitychange', v); }; },[]);
   useEffect(()=>{
     let vivo = true;
     const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const c = await DB.chatsResumen(72); const v = vistosGet(); if(vivo) setChatsPend(c.filter(x=>esPendiente(x,v)).length); }catch(e){}
@@ -1679,6 +1683,7 @@ function App(){
         </div>
       </div>
 
+      {alertaEnt && <div className="alerta-entrega"><b>⚠ Atención:</b> {alertaEnt.alerta_entrega} <span style={{opacity:.8,fontSize:13}}>(desde las {new Date(alertaEnt.alerta_entrega_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})})</span></div>}
       {/* TABS */}
       <div className="tabs">
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
