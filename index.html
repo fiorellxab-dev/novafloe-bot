@@ -1099,7 +1099,8 @@ function agruparPedidos(rows){
 function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQuitarAviso}){
   const notaRev = (g.filas.map(f=>f.notas).find(n=>/^REVISAR:/.test(n||''))||'').replace(/^REVISAR:\s*/,'').split(' | ')[0];
   const b = g.base;
-  const nombre = b.envio_nombre || b.cliente_nombre || 'Cliente sin nombre';
+  const esRecoge = /^Recoge en tienda/i.test(b.envio_direccion||'');
+  const nombre = esRecoge ? ((b.envio_nombre && !/^Cliente \(recoge\)$/i.test(b.envio_nombre)) ? b.envio_nombre : (b.cliente_nombre ? b.cliente_nombre + ' (recoge)' : 'Cliente (recoge)')) : (b.envio_nombre || b.cliente_nombre || 'Cliente sin nombre');
   const esperando = b.estado==='pendiente_confirmacion_humana';
   const empacado = g.filas.every(f=>f.empacado);
   const total = g.filas.reduce((s,f)=>s+(Number(f.precio_total)||0),0);
@@ -1128,7 +1129,14 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
       <div className="pk-total">Total del pedido: {fmt(total)}</div>
       {avisoJefa && <div className="pk-revisar" style={{background:'#FDE8E8',borderColor:'#C0392B'}}><b style={{color:'#C0392B'}}>⏸ {avisoJefa}</b><div><button className="pk-btn sec" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onQuitarAviso(g)}>Ya lo resolví (quitar aviso)</button></div></div>}
       {deudaEnvio && <div className="pk-revisar"><b>{envioTexto(deudaEnvio)}.</b> {Number(deudaEnvio.envio_valor)===-1 ? 'Confírmalo con la clienta y cóbraselo antes de despachar.' : 'No empaques hasta que lo pague.'}<div><button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onEnvioPagado(g)}>Envío pagado</button></div></div>}
-      {b.envio_direccion ? (
+      {/^Recoge en tienda/i.test(b.envio_direccion||'') ? (
+        <div className="pk-envio">
+          <div className="t">🏬 RECOGE EN TIENDA — no se envía</div>
+          <div className="f"><span>Quién</span><span>{nombre}</span></div>
+          <div className="f"><span>Teléfono</span><span>{b.envio_telefono || b.telefono_real || ''}</span></div>
+          <div className="pk-falta" style={{marginTop:6,fontSize:16,background:'#E8F3EC',color:'#2F6B4C'}}>Déjalo listo en el punto físico (Cra 19W #15-22). Atiende de 10 a 12 y de 3 a 6.</div>
+        </div>
+      ) : b.envio_direccion ? (
         <div className="pk-envio">
           <div className="t">Datos de envío</div>
           <div className="f"><span>Nombre</span><span>{b.envio_nombre}</span></div>
@@ -1141,7 +1149,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
         </div>
       ) : <div className="pk-falta">Todavía no mandó los datos de envío.</div>}
       <div className="pk-acciones">
-        {b.envio_direccion && <button className="pk-btn sec" onClick={copiar}>Copiar datos de envío</button>}
+        {b.envio_direccion && !/^Recoge en tienda/i.test(b.envio_direccion) && <button className="pk-btn sec" onClick={copiar}>Copiar datos de envío</button>}
         {!esperando && !empacado && !deudaEnvio && !avisoJefa && b.estado!=='pidiendo_datos_envio' && <button className="pk-btn ok" onClick={()=>onMarcar(g,true)}>Ya empaqué este pedido</button>}
         {empacado && <button className="pk-btn sec" onClick={()=>onMarcar(g,false)}>Deshacer</button>}
       </div>
