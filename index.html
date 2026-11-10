@@ -545,7 +545,7 @@ const DB = {
   },
   async chatPedidos(tel){ /* pedido-en-chat */
     const [p, pr] = await Promise.all([
-      sb.from('nf_pedidos').select('id,estado,talla,cantidad,precio_total,producto_id,created_at,grupo_id,envio_nombre,envio_cedula,envio_telefono,envio_direccion,envio_ciudad,envio_email,monto_detectado,envio_valor,envio_pagado').eq('cliente_telefono',tel).gte('created_at', new Date(Date.now()-7*864e5).toISOString()).order('created_at',{ascending:false}).limit(20),
+      sb.from('nf_pedidos').select('id,estado,talla,cantidad,precio_total,producto_id,created_at,grupo_id,envio_nombre,envio_cedula,envio_telefono,envio_direccion,envio_ciudad,envio_email,monto_detectado,envio_valor,envio_pagado,nota_jefa').eq('cliente_telefono',tel).gte('created_at', new Date(Date.now()-7*864e5).toISOString()).order('created_at',{ascending:false}).limit(20),
       sb.from('nf_productos').select('id,nombre')
     ]);
     if(p.error) throw p.error;
@@ -1096,7 +1096,7 @@ function agruparPedidos(rows){
   rows.forEach(r=>{ const k = [r.cliente_telefono||r.grupo_id||r.id, norm(r.envio_direccion), r.estado].join('|'); (g[k] = g[k] || []).push(r); });
   return Object.values(g).map(fs=>{ const base = fs.slice().sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at))[0]; return { id: fs.map(f=>f.id).join(','), filas: fs, base }; });
 }
-function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado}){
+function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQuitarAviso}){
   const notaRev = (g.filas.map(f=>f.notas).find(n=>/^REVISAR:/.test(n||''))||'').replace(/^REVISAR:\s*/,'').split(' | ')[0];
   const b = g.base;
   const nombre = b.envio_nombre || b.cliente_nombre || 'Cliente sin nombre';
@@ -1105,6 +1105,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado}){
   const total = g.filas.reduce((s,f)=>s+(Number(f.precio_total)||0),0);
   const parcial = !empacado && g.filas.some(f=>f.empacado);
   const deudaEnvio = g.filas.find(envioDeuda);
+  const avisoJefa = (g.filas.find(f=>f.nota_jefa)||{}).nota_jefa || ''; /* nota-jefa */
   const nuevo = !empacado && !esperando && (Date.now() - new Date(b.updated_at||b.created_at).getTime() < 120000);
   async function copiar(){
     const t = `Nombre: ${b.envio_nombre||''}\nCédula: ${b.envio_cedula||''}\nTeléfono: ${b.envio_telefono||''}\nDirección: ${b.envio_direccion||''}\nCiudad: ${b.envio_ciudad||''}\nCorreo: ${b.envio_email||''}`; /* correo-citas */
@@ -1125,6 +1126,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado}){
         })}
       </div>
       <div className="pk-total">Total del pedido: {fmt(total)}</div>
+      {avisoJefa && <div className="pk-revisar" style={{background:'#FDE8E8',borderColor:'#C0392B'}}><b style={{color:'#C0392B'}}>⏸ {avisoJefa}</b><div><button className="pk-btn sec" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onQuitarAviso(g)}>Ya lo resolví (quitar aviso)</button></div></div>}
       {deudaEnvio && <div className="pk-revisar"><b>{envioTexto(deudaEnvio)}.</b> {Number(deudaEnvio.envio_valor)===-1 ? 'Confírmalo con la clienta y cóbraselo antes de despachar.' : 'No empaques hasta que lo pague.'}<div><button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onEnvioPagado(g)}>Envío pagado</button></div></div>}
       {b.envio_direccion ? (
         <div className="pk-envio">
@@ -1140,7 +1142,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado}){
       ) : <div className="pk-falta">Todavía no mandó los datos de envío.</div>}
       <div className="pk-acciones">
         {b.envio_direccion && <button className="pk-btn sec" onClick={copiar}>Copiar datos de envío</button>}
-        {!esperando && !empacado && !deudaEnvio && b.estado!=='pidiendo_datos_envio' && <button className="pk-btn ok" onClick={()=>onMarcar(g,true)}>Ya empaqué este pedido</button>}
+        {!esperando && !empacado && !deudaEnvio && !avisoJefa && b.estado!=='pidiendo_datos_envio' && <button className="pk-btn ok" onClick={()=>onMarcar(g,true)}>Ya empaqué este pedido</button>}
         {empacado && <button className="pk-btn sec" onClick={()=>onMarcar(g,false)}>Deshacer</button>}
       </div>
     </div>
@@ -1190,6 +1192,13 @@ function PedidosView({productos}){
     toast(valor?'Listo, pedido empacado':'Pedido devuelto a la lista');
   }
 
+  async function quitarAviso(g){
+    const ids = g.filas.map(f=>f.id);
+    const {error} = await sb.from('nf_pedidos').update({nota_jefa:null}).in('id',ids);
+    if(error){ toast('No se pudo guardar: '+error.message); return; }
+    setPedidos(prev=>prev.map(p=>ids.includes(p.id)?{...p,nota_jefa:null}:p));
+    toast('Listo, aviso quitado');
+  }
   async function envioPagado(g){
     const ids = g.filas.map(f=>f.id);
     const {error} = await sb.from('nf_pedidos').update({envio_pagado:true}).in('id',ids);
@@ -1208,12 +1217,13 @@ function PedidosView({productos}){
   const porRevisar = agruparPedidos(pedidos.filter(p=>/^REVISAR:/.test(p.notas||'')));
   const faltanDatos = agruparPedidos(pedidos.filter(p=>p.estado==='pidiendo_datos_envio'));
   const listos = agruparPedidos(pedidos.filter(p=>p.estado==='listo_para_enviar'));
+  const conAviso = agruparPedidos(pedidos.filter(p=>p.nota_jefa));
   const porCobrarEnvio = listos.filter(g=>g.filas.some(envioDeuda));
   const sinDeuda = listos.filter(g=>!g.filas.some(envioDeuda));
   const porEmpacar = sinDeuda.filter(g=>!g.filas.every(f=>f.empacado));
   const empacados = sinDeuda.filter(g=>g.filas.every(f=>f.empacado));
   const esperando = agruparPedidos(pedidos.filter(p=>p.estado==='pendiente_confirmacion_humana'));
-  const lista = filtro==='envio' ? porCobrarEnvio : filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : filtro==='datos' ? faltanDatos : empacados;
+  const lista = filtro==='aviso' ? conAviso : filtro==='envio' ? porCobrarEnvio : filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : filtro==='datos' ? faltanDatos : empacados;
   const vacio = {listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.', esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.',revisar:'No hay pagos por revisar.',datos:'No hay clientas pendientes de mandar sus datos.'}[filtro];
 
   return (
@@ -1223,9 +1233,11 @@ function PedidosView({productos}){
         <button className={`pk-chip ${filtro==='esperando'?'on':''}`} onClick={()=>setFiltro('esperando')}>Esperando confirmación ({esperando.length})</button>
         <button className={`pk-chip ${filtro==='hechos'?'on':''}`} onClick={()=>setFiltro('hechos')}>Ya empacados ({empacados.length})</button>
         {porRevisar.length>0 && <button className={`pk-chip ${filtro==='revisar'?'on':''}`} onClick={()=>setFiltro('revisar')}>Por revisar ({porRevisar.length})</button>}
+        {conAviso.length>0 && <button className={`pk-chip ${filtro==='aviso'?'on':''}`} onClick={()=>setFiltro('aviso')} style={{background:'#FDE8E8',color:'#C0392B',fontWeight:700}}>⏸ Con aviso ({conAviso.length})</button>}
         {porCobrarEnvio.length>0 && <button className={`pk-chip ${filtro==='envio'?'on':''}`} onClick={()=>setFiltro('envio')}>Falta pagar envío ({porCobrarEnvio.length})</button>}
         {faltanDatos.length>0 && <button className={`pk-chip ${filtro==='datos'?'on':''}`} onClick={()=>setFiltro('datos')}>Faltan datos ({faltanDatos.length})</button>}
       </div>
+      {filtro==='aviso' && <div className="pk-nota"><b>Estos pedidos tienen un aviso</b>: léelo antes de despachar. Cuando se resuelva, toca <b>Ya lo resolví</b>.</div>}
       {filtro==='envio' && <div className="pk-nota">Estas clientas <b>ya pagaron el jean</b> y mandaron sus datos, pero <b>falta que paguen el envío</b> (o domicilio). No las empaques todavía. Cuando llegue su comprobante, toca <b>Envío pagado</b> y pasan solas a "Listo para enviar".</div>}
       {filtro==='datos' && <div className="pk-nota">Estas clientas <b>ya pagaron</b>, pero todavía no mandan sus datos de envío (o su correo). Escríbeles para que los manden. No se deben empacar hasta tener los datos.</div>}
       {filtro==='revisar' && <div className="pk-nota">Estos pagos se confirmaron solos, pero algo se veía raro (monto distinto, comprobante que no se pudo leer o referencia repetida). Verifícalos en el banco y toca <b>Ya lo revisé</b>.</div>}
@@ -1235,7 +1247,7 @@ function PedidosView({productos}){
           ? <div className="loading-page"><div className="spinner"/></div>
           : lista.length===0
             ? <div className="empty"><p style={{fontSize:18}}>{vacio}</p></div>
-            : lista.map(g=><PedidoEmpaque key={g.id} g={g} productos={productos} onMarcar={marcar} onRevisado={revisado} onEnvioPagado={envioPagado}/>)
+            : lista.map(g=><PedidoEmpaque key={g.id} g={g} productos={productos} onMarcar={marcar} onRevisado={revisado} onEnvioPagado={envioPagado} onQuitarAviso={quitarAviso}/>)
         }
       </div>
     </div>
@@ -1303,6 +1315,7 @@ function PedidoEnChat({tel}){
     const faltan = campos.filter(x=>!x[1]).length;
     return <div key={i} style={{border:'1.5px solid var(--line,#EDD8E0)',borderRadius:14,padding:'10px 12px',marginBottom:8,background:'#fff'}}>
       <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className={'ch-tag '+k}>{txt}</span><b style={{fontSize:15}}>{g.map(p=>p.producto+' t'+p.talla+(p.cantidad>1?' x'+p.cantidad:'')).join(' + ')} · {'$'+total.toLocaleString('es-CO')}</b></div>
+      {g.some(p=>p.nota_jefa) && <div style={{marginTop:8,fontSize:14,fontWeight:700,color:'#C0392B'}}>⏸ {(g.find(p=>p.nota_jefa)||{}).nota_jefa}</div>}
       {g.some(envioDeuda) && <div style={{marginTop:8,fontSize:14,display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}><b style={{color:'var(--red,#b3261e)'}}>{envioTexto(g.find(envioDeuda))}</b><button className="pk-btn ok" style={{minWidth:0,flex:'none',padding:'8px 14px',fontSize:15}} onClick={()=>pagarEnvio(g)}>Envío pagado</button></div>}
       {!g.some(envioDeuda) && g.some(p=>p.envio_pagado===true && Number(p.envio_valor)>0) && <div style={{marginTop:8,fontSize:14,color:'var(--green,#3D7A5A)'}}><b>Envío pagado ✓</b></div>}
       {(p0.estado==='pidiendo_datos_envio' || p0.estado==='listo_para_enviar') && <div style={{marginTop:8,fontSize:14,lineHeight:1.5}}>
@@ -1595,7 +1608,7 @@ function App(){
   useEffect(()=>{
     let vivo = true;
     const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const c = await DB.chatsResumen(72); const v = vistosGet(); if(vivo) setChatsPend(c.filter(x=>esPendiente(x,v)).length); }catch(e){}
-      try{ const ps = await DB.cargarPedidos(); const k = new Set(); ps.forEach(p=>{ const sinDatos = p.estado==='pidiendo_datos_envio' && !p.envio_direccion; const revisar = /^REVISAR:/.test(p.notas||'') && p.estado!=='cancelado'; const envio = p.estado==='listo_para_enviar' && envioDeuda(p); const espera = p.estado==='pendiente_confirmacion_humana'; if(sinDatos||revisar||envio||espera) k.add(p.grupo_id||p.id); }); if(vivo) setPedPend(k.size); }catch(e){} };
+      try{ const ps = await DB.cargarPedidos(); const k = new Set(); ps.forEach(p=>{ const sinDatos = p.estado==='pidiendo_datos_envio' && !p.envio_direccion; const revisar = /^REVISAR:/.test(p.notas||'') && p.estado!=='cancelado'; const envio = p.estado==='listo_para_enviar' && envioDeuda(p); const espera = p.estado==='pendiente_confirmacion_humana'; const aviso = !!p.nota_jefa; if(sinDatos||revisar||envio||espera||aviso) k.add(p.grupo_id||p.id); }); if(vivo) setPedPend(k.size); }catch(e){} };
     f(); const t = setInterval(f, 90000);
     return ()=>{ vivo = false; clearInterval(t); };
   },[]);
