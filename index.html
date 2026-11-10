@@ -316,6 +316,10 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .tab.on{color:var(--blush-dd);border-bottom-color:var(--blush-d);}
 
 /* PEDIDOS */
+.pk-zona{display:flex;gap:6px;margin:1rem 1.25rem 0;padding:5px;background:var(--white);border:2px solid var(--border);border-radius:14px}
+.pk-zona button{flex:1;border:0;background:transparent;border-radius:10px;padding:12px 6px;font-size:17px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--night-2);display:flex;align-items:center;justify-content:center;gap:6px}
+.pk-zona button.on{background:var(--night-2);color:#fff}
+.pk-zona .n{background:var(--blush-d);color:#fff;border-radius:999px;font-size:13px;padding:1px 8px;min-width:22px}
 .pk-chips{display:flex;gap:8px;flex-wrap:wrap;padding:1rem 1.25rem 0}
 .pk-chip{border:2px solid var(--border);background:var(--white);border-radius:999px;padding:12px 18px;font-size:17px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--night-2)}
 .pk-chip.on{background:var(--blush-d);border-color:var(--blush-d);color:#fff}
@@ -1167,6 +1171,8 @@ function PedidosView({productos}){
   const [filtro, setFiltro] = useState('listo');
   const [subiendoSky, setSubiendoSky] = useState(false);
   const [resSky, setResSky] = useState(null);
+  const [zona, setZonaS] = useState(()=>{ try{ return localStorage.getItem('nf_zona_pedidos')||'todos'; }catch(e){ return 'todos'; } });
+  const setZona = z => { setZonaS(z); try{ localStorage.setItem('nf_zona_pedidos', z); }catch(e){} };
 
   useEffect(()=>{
     cargar();
@@ -1247,22 +1253,32 @@ function PedidosView({productos}){
     }catch(e){ toast('No se pudo subir: '+(e.message||e)); setResSky({ok:false, resultados:[{ok:false, nombre:'', error:String(e.message||e)}]}); }
     setSubiendoSky(false);
   }
-  const porRevisar = agruparPedidos(pedidos.filter(p=>/^REVISAR:/.test(p.notas||'')));
-  const faltanDatos = agruparPedidos(pedidos.filter(p=>p.estado==='pidiendo_datos_envio'));
-  const listos = agruparPedidos(pedidos.filter(p=>p.estado==='listo_para_enviar'));
-  const conAviso = agruparPedidos(pedidos.filter(p=>p.nota_jefa));
+  /* zona (10-nov): separar pedidos de AFUERA (Skydropx/transportadora) y de MONTERIA (domicilio o recoge en tienda). Sin datos todavia: sale en las dos. */
+  const esMont = p => /monter[ií]a/i.test(p.envio_ciudad||'') || /^Recoge en tienda/i.test(p.envio_direccion||'');
+  const sinZona = p => !String(p.envio_ciudad||'').trim() && !String(p.envio_direccion||'').trim();
+  const enZona = (p, z) => z==='todos' || sinZona(p) || (z==='monteria' ? esMont(p) : !esMont(p));
+  const pz = pedidos.filter(p=>enZona(p, zona));
+  const cuentaZona = z => agruparPedidos(pedidos.filter(p=>p.estado==='listo_para_enviar' && !p.empacado && enZona(p,z) && !(z!=='todos' && sinZona(p)))).length;
+  const porRevisar = agruparPedidos(pz.filter(p=>/^REVISAR:/.test(p.notas||'')));
+  const faltanDatos = agruparPedidos(pz.filter(p=>p.estado==='pidiendo_datos_envio'));
+  const listos = agruparPedidos(pz.filter(p=>p.estado==='listo_para_enviar'));
+  const conAviso = agruparPedidos(pz.filter(p=>p.nota_jefa));
   const porCobrarEnvio = listos.filter(g=>g.filas.some(envioDeuda));
   const sinDeuda = listos.filter(g=>!g.filas.some(envioDeuda));
   const porEmpacar = sinDeuda.filter(g=>!g.filas.every(f=>f.empacado));
   /* empacados-ayer-y-hoy (10-nov): en "Ya empacados" solo se ven los de ayer y hoy (hora Colombia). Los demas siguen guardados en la base. */
   const _desdeAyer = new Date(hoyCO(-1)+'T00:00:00-05:00').getTime();
   const empacados = sinDeuda.filter(g=>g.filas.every(f=>f.empacado) && g.filas.some(f=>new Date(f.created_at).getTime() >= _desdeAyer));
-  const esperando = agruparPedidos(pedidos.filter(p=>p.estado==='pendiente_confirmacion_humana'));
+  const esperando = agruparPedidos(pz.filter(p=>p.estado==='pendiente_confirmacion_humana'));
   const lista = filtro==='aviso' ? conAviso : filtro==='envio' ? porCobrarEnvio : filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : filtro==='datos' ? faltanDatos : empacados;
   const vacio = {listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.', esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.',revisar:'No hay pagos por revisar.',datos:'No hay clientas pendientes de mandar sus datos.'}[filtro];
 
   return (
     <div>
+      <div className="pk-zona">
+        {[['todos','Todos',cuentaZona('todos')],['afuera','🚚 Para afuera',cuentaZona('afuera')],['monteria','🏠 Montería',cuentaZona('monteria')]].map(([z,t,n])=>
+          <button key={z} className={zona===z?'on':''} onClick={()=>setZona(z)}>{t}{n>0 && <span className="n">{n}</span>}</button>)}
+      </div>
       <div className="pk-chips">
         <button className={`pk-chip ${filtro==='listo'?'on':''}`} onClick={()=>setFiltro('listo')}>Listo para enviar ({porEmpacar.length})</button>
         <button className={`pk-chip ${filtro==='esperando'?'on':''}`} onClick={()=>setFiltro('esperando')}>Esperando confirmación ({esperando.length})</button>
@@ -1277,8 +1293,8 @@ function PedidosView({productos}){
       {filtro==='datos' && <div className="pk-nota">Estas clientas <b>ya pagaron</b>, pero todavía no mandan sus datos de envío (o su correo). Escríbeles para que los manden. No se deben empacar hasta tener los datos.</div>}
       {filtro==='revisar' && <div className="pk-nota">Estos pagos se confirmaron solos, pero algo se veía raro (monto distinto, comprobante que no se pudo leer o referencia repetida). Verifícalos en el banco y toca <b>Ya lo revisé</b>.</div>}
       {filtro==='esperando' && <div className="pk-nota">Estos pedidos todavía <b>no se deben empacar</b>: el pago se está revisando. Cuando se confirme, pasan solos a "Listo para enviar".</div>}
-      {filtro==='listo' && <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}><b>📤 Skydropx:</b> empaca cada pedido y toca <b>Ya empaqué este pedido</b>. Los de afuera de Montería se suben a Skydropx desde <b>Ya empacados ayer y hoy</b>.</div>}
-      {filtro==='hechos' && (()=>{ const n = empacados.filter(esParaSky).length; const ya = empacados.filter(g=>g.filas.every(f=>f.skydropx_order_id)).length; return (
+      {filtro==='listo' && zona!=='monteria' && <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}><b>📤 Skydropx:</b> empaca cada pedido y toca <b>Ya empaqué este pedido</b>. Los de afuera de Montería se suben a Skydropx desde <b>Ya empacados ayer y hoy</b>.</div>}
+      {filtro==='hechos' && zona!=='monteria' && (()=>{ const n = empacados.filter(esParaSky).length; const ya = empacados.filter(g=>g.filas.every(f=>f.skydropx_order_id)).length; return (
         <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}>
           <div><b>📤 Skydropx:</b> {n>0 ? <>{n} pedido(s) empacado(s) de afuera de Montería sin subir.</> : 'No hay pedidos empacados de afuera pendientes de subir.'}{ya>0 && <> · {ya} ya está(n) en Skydropx.</>}</div>
           {n>0 && <button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} disabled={subiendoSky} onClick={()=>subirSky(null)}>{subiendoSky?'Subiendo…':'Subir los '+n+' a Skydropx'}</button>}
