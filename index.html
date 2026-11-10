@@ -1612,7 +1612,7 @@ function App(){
   const [chatsPend, setChatsPend] = useState(0);
   const [pedPend, setPedPend] = useState(0); /* aviso-pedidos */
   const [alertaEnt, setAlertaEnt] = useState(null); /* alerta-entrega */
-  useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_bot_estado').select('alerta_entrega,alerta_entrega_at').eq('id',1).single(); if(vivo) setAlertaEnt(data && data.alerta_entrega ? data : null); }catch(e){} }; f(); const t = setInterval(f, 45000); const v = ()=>{ if(document.visibilityState==='visible') f(); }; document.addEventListener('visibilitychange', v); return ()=>{ vivo = false; clearInterval(t); document.removeEventListener('visibilitychange', v); }; },[]);
+  useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_bot_estado').select('alerta_entrega,alerta_entrega_at,alerta_sin_respuesta,alerta_sin_respuesta_at').eq('id',1).single(); if(vivo) setAlertaEnt(data && (data.alerta_entrega || data.alerta_sin_respuesta) ? data : null); }catch(e){} }; f(); const t = setInterval(f, 45000); const v = ()=>{ if(document.visibilityState==='visible') f(); }; document.addEventListener('visibilitychange', v); return ()=>{ vivo = false; clearInterval(t); document.removeEventListener('visibilitychange', v); }; },[]);
   useEffect(()=>{
     let vivo = true;
     const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const c = await DB.chatsResumen(72); const v = vistosGet(); if(vivo) setChatsPend(c.filter(x=>esPendiente(x,v)).length); }catch(e){}
@@ -1704,7 +1704,8 @@ function App(){
         </div>
       </div>
 
-      {alertaEnt && <div className="alerta-entrega"><b>⚠ Atención:</b> {alertaEnt.alerta_entrega} <span style={{opacity:.8,fontSize:13}}>(desde las {new Date(alertaEnt.alerta_entrega_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})})</span></div>}
+      {alertaEnt && alertaEnt.alerta_sin_respuesta && <div className="alerta-entrega"><b>⏰ Clientas esperando respuesta:</b> {alertaEnt.alerta_sin_respuesta} <span style={{opacity:.8,fontSize:13}}>(revisado a las {new Date(alertaEnt.alerta_sin_respuesta_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}). Ábrelas en Chats.</span></div>}
+      {alertaEnt && alertaEnt.alerta_entrega && <div className="alerta-entrega"><b>⚠ Atención:</b> {alertaEnt.alerta_entrega}<span style={{opacity:.8,fontSize:13}}>(desde las {new Date(alertaEnt.alerta_entrega_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})})</span></div>}
       {/* TABS */}
       <div className="tabs">
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
