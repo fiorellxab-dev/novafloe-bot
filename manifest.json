@@ -3,8 +3,8 @@
   "short_name": "Nova Floe",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F7F2F4",
-  "theme_color": "#C4728A",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
   "orientation": "portrait",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
