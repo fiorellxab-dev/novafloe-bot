@@ -1167,6 +1167,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
       ) : <div className="pk-falta">Todavía no mandó los datos de envío.</div>}
       {g.filas.some(f=>f.skydropx_compra==='ok') && (()=>{ const f = g.filas.find(x=>x.skydropx_compra==='ok'); return <div className="pk-falta" style={{marginTop:10,background:'#E8F3EC',color:'#2F6B4C'}}>🧾 <b>Guía comprada</b>{f.skydropx_transportadora ? ' ('+f.skydropx_transportadora.charAt(0).toUpperCase()+f.skydropx_transportadora.slice(1)+')' : ''}{f.skydropx_guia ? <> · N.º <b>{f.skydropx_guia}</b></> : ''}{f.skydropx_costo ? ' · $'+Number(f.skydropx_costo).toLocaleString('es-CO') : ''}</div>; })()}
       {g.filas.some(f=>f.skydropx_compra==='en_curso') && <div className="pk-falta" style={{marginTop:10}}>⏳ Comprando la guía…</div>}
+      {g.filas.some(f=>f.skydropx_compra==='contraentrega') && <div className="pk-falta" style={{marginTop:10,background:'#F1EEF6',color:'#5B4B73'}}>📦 Va <b>contra entrega</b> (sin guía de Skydropx).</div>}
       {!g.filas.some(f=>f.skydropx_compra==='ok') && g.filas.every(f=>f.skydropx_order_id) && <div className="pk-falta" style={{marginTop:10,background:'#E8F3EC',color:'#2F6B4C'}}>📤 <b>Ya está en Skydropx</b>{(()=>{ const t = g.filas.map(f=>f.skydropx_at).filter(Boolean).sort()[0]; return t ? ' (subido '+fechaAmable(t)+')' : ''; })()}. Compra e imprime la guía en Skydropx.</div>}
       {!g.filas.every(f=>f.skydropx_order_id) && g.filas.some(f=>f.skydropx_error) && <div className="pk-falta" style={{marginTop:10}}>⚠️ <b>No se pudo subir a Skydropx:</b> {(g.filas.find(f=>f.skydropx_error)||{}).skydropx_error}</div>}
       <div className="pk-acciones">
@@ -1280,21 +1281,22 @@ function PedidosView({productos}){
   const cuentaZona = z => agruparPedidos(pedidos.filter(p=>p.estado==='listo_para_enviar' && !p.empacado && enZona(p,z) && !(z!=='todos' && sinZona(p)))).length;
   /* guias-jadens (10-nov): "Comprar e imprimir guias" = cotizar (gratis) → la jefa confirma el total → comprar de a 4 → un PDF 10x15 → imprimir.
      La compra solo funciona si nf_bot_estado.skydropx_compra_activa = true (lo revisa tambien el servidor). Nunca compra dos veces (candado en el servidor). */
-  const esParaGuia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && x.skydropx_compra!=='ok' && x.skydropx_compra!=='en_curso') && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||'') && !g.filas.some(envioDeuda); };
+  const esParaGuia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && (!x.skydropx_compra || x.skydropx_compra==='error')) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||'') && !g.filas.some(envioDeuda); };
   const invocar = async body => { const {data, error} = await sb.functions.invoke('skydropx', {body}); if(error){ let m = error.message; try{ const j = await error.context.json(); if(j && j.error) m = j.error; }catch(e){} throw new Error(m); } return data; };
   async function cotizarGuias(){
     if(guias.paso==='cotizando' || guias.paso==='comprando') return;
     const lista = empacados.filter(esParaGuia);
     if(!lista.length){ toast('No hay pedidos empacados de afuera sin guía'); return; }
     setGuias({paso:'cotizando'});
-    try{ const d = await invocar({accion:'cotizar_guias', ids: lista.flatMap(x=>x.filas.map(f=>f.id))}); setGuias({paso:'cotizado', cot:d}); }
+    try{ const d = await invocar({accion:'cotizar_guias', ids: lista.flatMap(x=>x.filas.map(f=>f.id))}); /* casillas-guias: la jefa marca cuales comprar; los caros vienen sin marcar */ const sel = {}; (d.resultados||[]).forEach(r=>{ if(r.ok && r.precio<=15000) sel[r.clave]=true; }); setGuias({paso:'cotizado', cot:d, sel}); }
     catch(e){ setGuias({paso:'error', error:'No se pudo cotizar: '+(e.message||e)}); }
   }
   async function comprarGuias(){
     const cot = guias.cot; if(!cot) return;
-    const oks = cot.resultados.filter(r=>r.ok);
-    if(!oks.length) return;
-    if(!confirm('¿Comprar '+oks.length+' guía(s) de '+cot.transportadora+' por $'+Number(cot.total).toLocaleString('es-CO')+'?\n\nSe descuenta del saldo de Skydropx.')) return;
+    const sel = guias.sel || {}; const oks = cot.resultados.filter(r=>r.ok && sel[r.clave]);
+    if(!oks.length){ toast('Marca al menos un pedido'); return; }
+    const totalSel = oks.reduce((t,r)=>t+r.precio,0);
+    if(!confirm('¿Comprar '+oks.length+' guía(s) de '+cot.transportadora+' por $'+totalSel.toLocaleString('es-CO')+'?\n\n'+oks.map(r=>'• '+r.nombre+' ($'+Number(r.precio).toLocaleString('es-CO')+')').join('\n')+'\n\nSe descuenta del saldo de Skydropx.')) return;
     const max = Math.round(Math.max(...oks.map(r=>r.precio)) * 1.15);
     const res = []; const compradosIds = [];
     for(let i=0;i<oks.length;i+=4){
@@ -1368,10 +1370,14 @@ function PedidosView({productos}){
           {n>0 && p!=='cotizando' && p!=='comprando' && p!=='pdf' && p!=='cotizado' && <button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={cotizarGuias}>{cfgGuias.activa ? '🖨️ Comprar e imprimir guías ('+n+')' : '💲 Ver cuánto costarían ('+n+')'}</button>}
           {p==='cotizando' && <div style={{marginTop:8}}>Cotizando con {T}…</div>}
           {p==='cotizado' && guias.cot && <div style={{marginTop:8,fontSize:15}}>
-            {guias.cot.resultados.map((r,i)=><div key={i} style={r.ok && r.precio>caro ? {color:'#C0392B',fontWeight:700} : null}>{r.ok ? (r.precio>caro?'🔴':'✅') : '⚠️'} {r.nombre}{r.ok ? ' → '+r.ciudad+': $'+Number(r.precio).toLocaleString('es-CO')+(r.dias?' ('+r.dias+' día'+(r.dias>1?'s':'')+')':'')+(r.precio>caro?' ENVÍO CARO':'') : ': '+r.error}</div>)}
-            <div style={{marginTop:8,fontSize:17}}><b>Total: ${Number(guias.cot.total).toLocaleString('es-CO')}</b> ({guias.cot.resultados.filter(r=>r.ok).length} guías)</div>
+            {guias.cot.resultados.map((r,i)=><label key={i} style={{...(r.ok && r.precio>caro ? {color:'#C0392B',fontWeight:700} : {}), display:'flex', alignItems:'center', gap:10, padding:'5px 0', cursor: r.ok && cfgGuias.activa ? 'pointer' : 'default'}}>
+              {r.ok && cfgGuias.activa ? <input type="checkbox" style={{width:22,height:22,flex:'none'}} checked={!!(guias.sel||{})[r.clave]} onChange={e=>{ const v = e.target.checked; setGuias(g=>({...g, sel:{...(g.sel||{}), [r.clave]:v}})); }}/> : <span style={{width:22,flex:'none',textAlign:'center'}}>{r.ok ? (r.precio>caro?'🔴':'✅') : '⚠️'}</span>}
+              <span>{r.nombre}{r.ok ? ' → '+r.ciudad+': $'+Number(r.precio).toLocaleString('es-CO')+(r.dias?' ('+r.dias+' día'+(r.dias>1?'s':'')+')':'')+(r.precio>caro?' 🔴 ENVÍO CARO':'') : ': '+r.error}</span></label>)}
+            {(()=>{ const m = guias.cot.resultados.filter(r=>r.ok && (guias.sel||{})[r.clave]); return cfgGuias.activa
+              ? <div style={{marginTop:8,fontSize:17}}><b>Marcados: {m.length} · Total ${m.reduce((t,r)=>t+r.precio,0).toLocaleString('es-CO')}</b> <span style={{fontSize:14,color:'var(--night-3)'}}>(solo se compran los marcados)</span></div>
+              : <div style={{marginTop:8,fontSize:17}}><b>Total de todos: ${Number(guias.cot.total).toLocaleString('es-CO')}</b> ({guias.cot.resultados.filter(r=>r.ok).length} guías)</div>; })()}
             <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
-              {cfgGuias.activa && guias.cot.activa && guias.cot.resultados.some(r=>r.ok) && <button className="pk-btn ok" style={{minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={comprarGuias}>Comprar e imprimir</button>}
+              {cfgGuias.activa && guias.cot.activa && guias.cot.resultados.some(r=>r.ok) && <button className="pk-btn ok" style={{minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={comprarGuias}>Comprar e imprimir los marcados</button>}
               <button className="pk-btn sec" style={{minWidth:0,flex:'none',padding:'12px 16px'}} onClick={()=>setGuias({paso:''})}>Cerrar</button>
             </div></div>}
           {p==='comprando' && <div style={{marginTop:8}}>Comprando guías… {guias.hechas} de {guias.total}. No cierres la app.</div>}
