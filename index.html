@@ -1162,7 +1162,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
           <div className="f"><span>Dirección</span><span>{b.envio_direccion}</span></div>
           <div className="f"><span>Ciudad</span><span>{b.envio_ciudad}</span></div>
           <div className="f"><span>Correo</span><span>{b.envio_email || <em style={{color:'#B07820'}}>Sin correo</em>}</span></div>
-          {!b.envio_email && <div className="pk-falta" style={{marginTop:6,fontSize:16}}>Sin correo: pídeselo a la clienta antes de generar la guía.</div>}
+          {!b.envio_email && !esRecoge && !/monter[ií]a/i.test(b.envio_ciudad||'') && <div className="pk-falta" style={{marginTop:6,fontSize:16}}>Sin correo: la guía sale con el correo de la tienda (no hace falta pedírselo).</div>}
         </div>
       ) : <div className="pk-falta">Todavía no mandó los datos de envío.</div>}
       {g.filas.some(f=>f.skydropx_compra==='ok') && (()=>{ const f = g.filas.find(x=>x.skydropx_compra==='ok'); return <div className="pk-falta" style={{marginTop:10,background:'#E8F3EC',color:'#2F6B4C'}}>🧾 <b>Guía comprada</b>{f.skydropx_transportadora ? ' ('+f.skydropx_transportadora.charAt(0).toUpperCase()+f.skydropx_transportadora.slice(1)+')' : ''}{f.skydropx_guia ? <> · N.º <b>{f.skydropx_guia}</b></> : ''}{f.skydropx_costo ? ' · $'+Number(f.skydropx_costo).toLocaleString('es-CO') : ''}</div>; })()}
