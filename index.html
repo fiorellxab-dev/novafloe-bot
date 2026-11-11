@@ -1354,8 +1354,8 @@ function PedidosView({productos}){
       {filtro==='datos' && <div className="pk-nota">Estas clientas <b>ya pagaron</b>, pero todavía no mandan sus datos de envío (o su correo). Escríbeles para que los manden. No se deben empacar hasta tener los datos.</div>}
       {filtro==='revisar' && <div className="pk-nota">Estos pagos se confirmaron solos, pero algo se veía raro (monto distinto, comprobante que no se pudo leer o referencia repetida). Verifícalos en el banco y toca <b>Ya lo revisé</b>.</div>}
       {filtro==='esperando' && <div className="pk-nota">Estos pedidos todavía <b>no se deben empacar</b>: el pago se está revisando. Cuando se confirme, pasan solos a "Listo para enviar".</div>}
-      {filtro==='listo' && zona!=='monteria' && <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}><b>📤 Skydropx:</b> empaca cada pedido y toca <b>Ya empaqué este pedido</b>. Los de afuera de Montería se suben a Skydropx desde <b>Ya empacados ayer y hoy</b>.</div>}
-      {filtro==='hechos' && zona!=='monteria' && (()=>{ const n = empacados.filter(esParaSky).length; const ya = empacados.filter(g=>g.filas.every(f=>f.skydropx_order_id)).length; return (
+      {filtro==='listo' && zona!=='monteria' && <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}><b>🖨️ Guías:</b> empaca cada pedido y toca <b>Ya empaqué este pedido</b>. Las guías de los de afuera de Montería se compran e imprimen desde <b>Ya empacados ayer y hoy</b>.</div>}
+      {filtro==='hechos' && zona!=='monteria' && !cfgGuias.activa && (()=>{ const n = empacados.filter(esParaSky).length; const ya = empacados.filter(g=>g.filas.every(f=>f.skydropx_order_id)).length; return (
         <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}>
           <div><b>📤 Skydropx:</b> {n>0 ? <>{n} pedido(s) empacado(s) de afuera de Montería sin subir.</> : 'No hay pedidos empacados de afuera pendientes de subir.'}{ya>0 && <> · {ya} ya está(n) en Skydropx.</>}</div>
           {n>0 && <button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} disabled={subiendoSky} onClick={()=>subirSky(null)}>{subiendoSky?'Subiendo…':'Subir los '+n+' a Skydropx'}</button>}
@@ -1394,7 +1394,7 @@ function PedidosView({productos}){
           ? <div className="loading-page"><div className="spinner"/></div>
           : lista.length===0
             ? <div className="empty"><p style={{fontSize:18}}>{vacio}</p></div>
-            : lista.map(g=><PedidoEmpaque key={g.id} g={g} productos={productos} onMarcar={marcar} onRevisado={revisado} onEnvioPagado={envioPagado} onQuitarAviso={quitarAviso} puedeSky={esParaSky(g)} subiendoSky={subiendoSky} onSky={()=>subirSky(g)} onReimprimir={reimprimir}/>)
+            : lista.map(g=><PedidoEmpaque key={g.id} g={g} productos={productos} onMarcar={marcar} onRevisado={revisado} onEnvioPagado={envioPagado} onQuitarAviso={quitarAviso} puedeSky={!cfgGuias.activa && esParaSky(g)} subiendoSky={subiendoSky} onSky={()=>subirSky(g)} onReimprimir={reimprimir}/>)
         }
       </div>
     </div>
