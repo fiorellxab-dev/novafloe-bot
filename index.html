@@ -1273,8 +1273,8 @@ function PedidosView({productos}){
     if(subiendoSky) return;
     const todos = !g;
     const lista = todos ? empacados.filter(esParaSky) : [g];
-    if(!lista.length){ toast('No hay pedidos empacados de afuera para subir'); return; }
-    if(todos && !confirm('¿Subir '+lista.length+' pedido(s) empacado(s) de afuera de Montería a Skydropx?\n\n'+lista.map(x=>'• '+((x.filas[0]||{}).envio_nombre||'')+' ('+((x.filas[0]||{}).envio_ciudad||'')+')').join('\n')+'\n\nSe crean como órdenes (no se compra ninguna guía). Después compras e imprimes las guías en Skydropx.')) return;
+    if(!lista.length){ toast('No hay pedidos empacados de envío nacional para subir'); return; }
+    if(todos && !confirm('¿Subir '+lista.length+' pedido(s) empacado(s) de envío nacional a Skydropx?\n\n'+lista.map(x=>'• '+((x.filas[0]||{}).envio_nombre||'')+' ('+((x.filas[0]||{}).envio_ciudad||'')+')').join('\n')+'\n\nSe crean como órdenes (no se compra ninguna guía). Después compras e imprimes las guías en Skydropx.')) return;
     setSubiendoSky(true); setResSky(null);
     try{
       const {data, error} = await sb.functions.invoke('skydropx', {body: {accion:'subir', ids: lista.flatMap(x=>x.filas.map(f=>f.id))}});
@@ -1298,7 +1298,7 @@ function PedidosView({productos}){
   async function cotizarGuias(){
     if(guias.paso==='cotizando' || guias.paso==='comprando') return;
     const lista = empacados.filter(esParaGuia);
-    if(!lista.length){ toast('No hay pedidos empacados de afuera sin guía'); return; }
+    if(!lista.length){ toast('No hay pedidos empacados de envío nacional sin guía'); return; }
     setGuias({paso:'cotizando'});
     try{ const d = await invocar({accion:'cotizar_guias', ids: lista.flatMap(x=>x.filas.map(f=>f.id))}); /* casillas-guias: la jefa marca cuales comprar; los caros vienen sin marcar */ const sel = {}; (d.resultados||[]).forEach(r=>{ if(r.ok && r.precio<=15000) sel[r.clave]=true; }); setGuias({paso:'cotizado', cot:d, sel}); }
     catch(e){ setGuias({paso:'error', error:'No se pudo cotizar: '+(e.message||e)}); }
@@ -1351,7 +1351,7 @@ function PedidosView({productos}){
   return (
     <div>
       <div className="pk-zona">
-        {[['todos','Todos',cuentaZona('todos')],['afuera','🚚 Para afuera',cuentaZona('afuera')],['monteria','🏠 Montería',cuentaZona('monteria')]].map(([z,t,n])=>
+        {[['todos','Todos',cuentaZona('todos')],['afuera','🚚 Envío nacional',cuentaZona('afuera')],['monteria','🏠 Montería',cuentaZona('monteria')]].map(([z,t,n])=>
           <button key={z} className={zona===z?'on':''} onClick={()=>setZona(z)}>{t}{n>0 && <span className="n">{n}</span>}</button>)}
       </div>
       <div className="pk-chips">
@@ -1368,17 +1368,17 @@ function PedidosView({productos}){
       {filtro==='datos' && <div className="pk-nota">Estas clientas <b>ya pagaron</b>, pero todavía no mandan sus datos de envío (o su correo). Escríbeles para que los manden. No se deben empacar hasta tener los datos.</div>}
       {filtro==='revisar' && <div className="pk-nota">Estos pagos se confirmaron solos, pero algo se veía raro (monto distinto, comprobante que no se pudo leer o referencia repetida). Verifícalos en el banco y toca <b>Ya lo revisé</b>.</div>}
       {filtro==='esperando' && <div className="pk-nota">Estos pedidos todavía <b>no se deben empacar</b>: el pago se está revisando. Cuando se confirme, pasan solos a "Listo para enviar".</div>}
-      {filtro==='listo' && zona!=='monteria' && <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}><b>🖨️ Guías:</b> empaca cada pedido y toca <b>Ya empaqué este pedido</b>. Las guías de los de afuera de Montería se compran e imprimen desde <b>Ya empacados ayer y hoy</b>.</div>}
+      {filtro==='listo' && zona!=='monteria' && <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}><b>🖨️ Guías:</b> empaca cada pedido y toca <b>Ya empaqué este pedido</b>. Las guías de los pedidos de envío nacional se compran e imprimen desde <b>Ya empacados ayer y hoy</b>.</div>}
       {filtro==='hechos' && zona!=='monteria' && !cfgGuias.activa && (()=>{ const n = empacados.filter(esParaSky).length; const ya = empacados.filter(g=>g.filas.every(f=>f.skydropx_order_id)).length; return (
         <div className="pk-nota" style={{background:'#EEF4FB',borderColor:'#9DB8D9'}}>
-          <div><b>📤 Skydropx:</b> {n>0 ? <>{n} pedido(s) empacado(s) de afuera de Montería sin subir.</> : 'No hay pedidos empacados de afuera pendientes de subir.'}{ya>0 && <> · {ya} ya está(n) en Skydropx.</>}</div>
+          <div><b>📤 Skydropx:</b> {n>0 ? <>{n} pedido(s) empacado(s) de envío nacional sin subir.</> : 'No hay pedidos empacados de envío nacional pendientes de subir.'}{ya>0 && <> · {ya} ya está(n) en Skydropx.</>}</div>
           {n>0 && <button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} disabled={subiendoSky} onClick={()=>subirSky(null)}>{subiendoSky?'Subiendo…':'Subir los '+n+' a Skydropx'}</button>}
           <div style={{fontSize:14,marginTop:8,color:'var(--night-3)'}}>Se crean como órdenes en Skydropx (no se compra nada). Luego entras a Skydropx, compras las guías, las imprimes, las pegas y despachas. Los de Montería, los que recogen en tienda y los que tienen aviso rojo no se suben.</div>
           {resSky && resSky.resultados && resSky.resultados.length>0 && <div style={{marginTop:8,fontSize:15}}>{resSky.resultados.map((r,i)=><div key={i}>{r.ok?'✅':'⚠️'} {r.nombre||''}{r.ok ? ' → '+(r.ciudad||'subido') : ': '+r.error}</div>)}</div>}
         </div>); })()}
       {filtro==='hechos' && zona!=='monteria' && (()=>{ const n = empacados.filter(esParaGuia).length; const T = cfgGuias.transportadora.charAt(0).toUpperCase()+cfgGuias.transportadora.slice(1); const caro = 15000; const p = guias.paso; return (
         <div className="pk-nota" style={{background:'#FFF7EC',borderColor:'#E8C48A'}}>
-          <div><b>🖨️ Guías {T}:</b> {n>0 ? <>{n} pedido(s) empacado(s) de afuera sin guía.</> : 'No hay pedidos empacados de afuera sin guía.'}{!cfgGuias.activa && <> <i>(La compra se activa después de la prueba; por ahora solo puedes ver cuánto costarían.)</i></>}</div>
+          <div><b>🖨️ Guías {T}:</b> {n>0 ? <>{n} pedido(s) empacado(s) de envío nacional sin guía.</> : 'No hay pedidos empacados de envío nacional sin guía.'}{!cfgGuias.activa && <> <i>(La compra se activa después de la prueba; por ahora solo puedes ver cuánto costarían.)</i></>}</div>
           {n>0 && p!=='cotizando' && p!=='comprando' && p!=='pdf' && p!=='cotizado' && <button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={cotizarGuias}>{cfgGuias.activa ? '🖨️ Comprar e imprimir guías ('+n+')' : '💲 Ver cuánto costarían ('+n+')'}</button>}
           {p==='cotizando' && <div style={{marginTop:8}}>Cotizando con {T}…</div>}
           {p==='cotizado' && guias.cot && <div style={{marginTop:8,fontSize:15}}>
