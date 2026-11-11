@@ -471,6 +471,14 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .ch-b{max-width:84%;padding:10px 14px;border-radius:16px;font-size:17px;line-height:1.38;white-space:pre-wrap;word-break:break-word;}
 .ch-b.user{align-self:flex-start;background:var(--white);border:1.5px solid var(--border);border-bottom-left-radius:4px;}
 .ch-b.assistant{align-self:flex-end;background:var(--blush-m);border-bottom-right-radius:4px;}
+.ch-b.asesora{background:#121212;color:#fff;} .ch-b.asesora .ch-h{color:#FBA6DA;}
+.ch-humano{margin:10px 1.25rem 0;padding:10px 14px;border-radius:12px;background:var(--blush-l);border:1.5px solid var(--blush);font-size:16px;line-height:1.4;}
+.ch-escribir{position:sticky;bottom:0;background:var(--mist);border-top:1px solid var(--border);padding:10px 1.25rem 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}
+.ch-txt{flex:1;min-width:0;border:1.5px solid var(--border);border-radius:14px;padding:10px 12px;font-family:var(--body);font-size:17px;resize:vertical;background:#fff;color:var(--night);outline:none;}
+.ch-txt:focus{border-color:var(--night);}
+.ch-enviar{flex:none;min-width:0;padding:12px 18px;font-size:17px;}
+.ch-env{width:100%;font-size:14px;} .ch-env.ok{color:var(--green);} .ch-env.mal{color:var(--red);}
+.ch-24h{font-size:15px;color:var(--night-3);line-height:1.4;}
 .ch-h{display:block;font-size:12px;color:var(--night-3);margin-top:4px;text-align:right;}
 .ch-cita{border-left:3px solid var(--blush-d);background:rgba(0,0,0,.05);border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:14px;color:var(--night-3);}
 .ch-foto{font-weight:700;}
@@ -544,7 +552,7 @@ const DB = {
   },
   async chatMensajes(tel){
     const [m, f] = await Promise.all([
-      sb.from('nf_conversaciones').select('id,rol,contenido,created_at,media_url,foto_publica').eq('telefono',tel).order('created_at',{ascending:false}).limit(250),
+      sb.from('nf_conversaciones').select('id,rol,contenido,created_at,media_url,foto_publica,autor').eq('telefono',tel).order('created_at',{ascending:false}).limit(250),
       sb.from('nf_fotos_enviadas').select('id,pie,created_at,url').eq('telefono',tel).order('created_at',{ascending:false}).limit(100)
     ]);
     if(m.error) throw m.error;
@@ -1502,6 +1510,39 @@ function ChatDetalle({c, onBack, atendido, onAtendido}){
   const num = numeroReal(c);
   const tags = etiquetasChat(c);
   let diaPrev = '';
+  /* escribir-desde-app (10-nov): la jefa escribe aqui → nf_salientes → el puente lo envia por WhatsApp.
+     Al escribir, el bot se calla con esta clienta (nf_humano) hasta que toque "Devolver al bot". Regla de WhatsApp: solo si ella escribio en las ultimas 24 h. */
+  const idsHumano = [c.telefono, num].filter(Boolean);
+  const [humano, setHumano] = useState(false);
+  const [texto, setTexto] = useState('');
+  const [envio, setEnvio] = useState(null); // {estado:'enviando'|'enviado'|'error', error}
+  const revisarHumano = async ()=>{ try{ const {data} = await sb.from('nf_humano').select('id,hasta').in('id', idsHumano).gt('hasta', new Date().toISOString()); setHumano(!!(data && data.length)); }catch(e){} };
+  useEffect(()=>{ revisarHumano(); const t = setInterval(()=>{ if(document.visibilityState==='visible') revisarHumano(); }, 15000); return ()=>clearInterval(t); },[c.telefono]);
+  const ultUser = (msgs||[]).filter(m=>m.rol==='user').map(m=>new Date(m.created_at).getTime()).sort((a,b)=>b-a)[0] || 0;
+  const ventanaAbierta = ultUser && (Date.now() - ultUser < 24*3600000 - 120000);
+  async function enviar(){
+    const t = texto.trim(); if(!t || (envio && envio.estado==='enviando')) return;
+    if(!ventanaAbierta){ toast('Pasaron más de 24 h: WhatsApp no deja escribirle hasta que ella escriba'); return; }
+    setEnvio({estado:'enviando'});
+    try{
+      const hasta = new Date(Date.now() + 365*864e5).toISOString(), ahora = new Date().toISOString();
+      const h = await sb.from('nf_humano').upsert(idsHumano.map(id=>({id, hasta, actualizado:ahora})), {onConflict:'id'}); if(h.error) throw h.error;
+      setHumano(true);
+      const {data, error} = await sb.from('nf_salientes').insert({telefono:c.telefono, texto:t}).select('id').single(); if(error) throw error;
+      setTexto('');
+      for(let i=0;i<20;i++){
+        await new Promise(r=>setTimeout(r,1500));
+        const r = await sb.from('nf_salientes').select('estado,error').eq('id', data.id).single();
+        if(r.data && r.data.estado==='enviado'){ setEnvio({estado:'enviado'}); cargar(); setTimeout(()=>{ if(finRef.current) finRef.current.scrollIntoView({behavior:'smooth'}); }, 400); return; }
+        if(r.data && r.data.estado==='error'){ setEnvio({estado:'error', error:r.data.error||'no se pudo enviar'}); setTexto(t); return; }
+      }
+      setEnvio({estado:'error', error:'El computador del bot no respondió (¿está prendido?). El mensaje queda en cola y sale apenas se conecte.'});
+    }catch(e){ setEnvio({estado:'error', error:String(e.message||e)}); setTexto(t); }
+  }
+  async function devolverAlBot(){
+    try{ const {error} = await sb.from('nf_humano').update({hasta:new Date().toISOString(), actualizado:new Date().toISOString()}).in('id', idsHumano); if(error) throw error; setHumano(false); toast('Listo: el bot vuelve a responderle'); }
+    catch(e){ toast('No se pudo: '+(e.message||e)); }
+  }
   return (
     <div className="ch-det">
       <div className="ch-det-top">
@@ -1516,6 +1557,7 @@ function ChatDetalle({c, onBack, atendido, onAtendido}){
         {num && <a className="pk-btn ok ch-wa" href={'https://wa.me/'+num} target="_blank" rel="noopener noreferrer">Escribirle por WhatsApp</a>}
         {!atendido && tags.length>0 && <button className="pk-btn sec" onClick={onAtendido}>Ya lo atendí</button>}
       </div>
+      {humano && <div className="ch-humano">🙋 <b>La estás atendiendo tú:</b> el bot no le responde a esta clienta. <button className="pk-btn sec" style={{minWidth:0,flex:'none',padding:'8px 14px',fontSize:16,marginLeft:6}} onClick={devolverAlBot}>🤖 Devolver al bot</button></div>}
       <PedidoEnChat tel={c.telefono}/>
       <div className="ch-msgs">
         {msgs===null ? <div className="loading-page"><div className="spinner"/></div>
@@ -1527,13 +1569,21 @@ function ChatDetalle({c, onBack, atendido, onAtendido}){
               const p = partirMensaje(m.contenido);
               const foto = !!m.media_url || /^\[envió una foto\]/i.test(p.texto);
               return <React.Fragment key={m.id}>{sep}
-                <div className={`ch-b ${m.rol==='assistant'?'assistant':'user'}`}>
+                <div className={`ch-b ${m.rol==='assistant'?'assistant':'user'}${m.autor==='asesora'?' asesora':''}`}>
                   {p.cita && <div className="ch-cita">↩ {p.cita.length>160 ? p.cita.slice(0,160)+'…' : p.cita}</div>}
                   {m.foto_pie!==undefined ? (/^https?:/.test(m.foto_url||'') ? <React.Fragment>{/* fotos-bot-en-chat */}<a href={m.foto_url} target="_blank" rel="noopener noreferrer"><img className="ch-img" src={m.foto_url} loading="lazy" alt={m.foto_pie||'Foto enviada por el bot'}/></a>{m.foto_pie && <div style={{marginTop:6,fontWeight:700}}>{m.foto_pie}</div>}</React.Fragment> : <span className="ch-foto">📷 Foto enviada{m.foto_pie ? ': '+m.foto_pie : ''}</span>) : (/^https?:/.test(m.foto_publica||'') ? <React.Fragment>{/* fotos-en-chat-v2 */}<a href={m.foto_publica} target="_blank" rel="noopener noreferrer"><img className="ch-img" src={m.foto_publica} loading="lazy" alt="Foto que mandó la clienta"/></a>{p.texto && !/^[envió una foto]/i.test(p.texto) && <div style={{marginTop:6}}>{p.texto}</div>}</React.Fragment> : (foto ? <span className="ch-foto">📷 Envió una foto</span> : p.texto))}
-                  <span className="ch-h">{m.rol==='assistant'?'Bot · ':''}{new Date(m.created_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}</span>
+                  <span className="ch-h">{m.rol==='assistant'?(m.autor==='asesora'?'Asesora · ':'Bot · '):''}{new Date(m.created_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}</span>
                 </div></React.Fragment>;
             })}
         <div ref={finRef}/>
+      </div>
+      <div className="ch-escribir">
+        {!ventanaAbierta && msgs!==null ? <div className="ch-24h">Pasaron más de 24 horas desde su último mensaje: WhatsApp no deja escribirle desde aquí hasta que ella vuelva a escribir. Puedes usar "Escribirle por WhatsApp".</div> : <>
+          <textarea className="ch-txt" rows={2} value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Escríbele a la clienta…" maxLength={2000}/>
+          <button className="pk-btn ok ch-enviar" disabled={!texto.trim() || (envio && envio.estado==='enviando')} onClick={enviar}>{envio && envio.estado==='enviando' ? 'Enviando…' : 'Enviar'}</button>
+        </>}
+        {envio && envio.estado==='enviado' && <div className="ch-env ok">✓ Enviado. El bot ya no le responde a esta clienta hasta que toques "Devolver al bot".</div>}
+        {envio && envio.estado==='error' && <div className="ch-env mal">⚠️ {envio.error}</div>}
       </div>
     </div>
   );
@@ -1819,7 +1869,7 @@ function Login({onLogin}){
   return (
     <div className="login-page">
       <div className="login-card">
-        <img className="login-logo-img" src="/logo-novafloe.png" alt="Nova Floe"/>
+        <img className="login-logo-img" src="logo-novafloe.png" alt="Nova Floe"/>
         <p className="login-sub">Ingresa tu contraseña para acceder al inventario</p>
         <label>Contraseña</label>
         <input
@@ -1919,7 +1969,7 @@ function App(){
       {/* TOPBAR */}
       <div className="topbar">
         <div className="brand">
-          <img className="brand-logo" src="/logo-novafloe.png" alt="Nova Floe"/>
+          <img className="brand-logo" src="logo-novafloe.png" alt="Nova Floe"/>
         </div>
         <div className="topbar-right">
           <button className="btn btn-ghost" title="Actualizar la página" onClick={()=>{ window.location.href = window.location.pathname + '?v=' + Date.now(); }}>
