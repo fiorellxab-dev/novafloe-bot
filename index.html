@@ -564,12 +564,12 @@ const DB = {
   },
   async chatPedidos(tel){ /* pedido-en-chat */
     const [p, pr] = await Promise.all([
-      sb.from('nf_pedidos').select('id,estado,talla,cantidad,precio_total,producto_id,created_at,grupo_id,envio_nombre,envio_cedula,envio_telefono,envio_direccion,envio_ciudad,envio_email,monto_detectado,envio_valor,envio_pagado,nota_jefa').eq('cliente_telefono',tel).gte('created_at', new Date(Date.now()-7*864e5).toISOString()).order('created_at',{ascending:false}).limit(20),
+      sb.from('nf_pedidos').select('id,estado,talla,cantidad,precio_total,producto_id,producto_nombre,created_at,grupo_id,envio_nombre,envio_cedula,envio_telefono,envio_direccion,envio_ciudad,envio_email,monto_detectado,envio_valor,envio_pagado,nota_jefa').eq('cliente_telefono',tel).gte('created_at', new Date(Date.now()-7*864e5).toISOString()).order('created_at',{ascending:false}).limit(20),
       sb.from('nf_productos').select('id,nombre')
     ]);
     if(p.error) throw p.error;
     const nom = {}; (pr.data||[]).forEach(x=>{ nom[x.id]=String(x.nombre||'').trim(); });
-    return (p.data||[]).map(x=>({...x, producto:nom[x.producto_id]||'Producto'}));
+    return (p.data||[]).map(x=>({...x, producto:nom[x.producto_id]||x.producto_nombre||'Producto'}));
   },
   async eliminar(id){
     const {error} = await sb.from('nf_productos').delete().eq('id',id);
@@ -1155,7 +1155,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
       <div className="pk-items">
         {g.filas.map(f=>{
           const pr = productos.find(x=>x.id===f.producto_id);
-          return <div className="pk-item" key={f.id}><b>{pr ? pr.nombre.trim() : 'Producto (ya no está en el inventario)'}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}{parcial && f.empacado && <span> ✓ ya empacado</span>}{parcial && !f.empacado && <span> · FALTA</span>}</div>;
+          return <div className="pk-item" key={f.id}><b>{pr ? pr.nombre.trim() : (f.producto_nombre ? f.producto_nombre+' (ya no está en el inventario)' : 'Producto (ya no está en el inventario)')}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}{parcial && f.empacado && <span> ✓ ya empacado</span>}{parcial && !f.empacado && <span> · FALTA</span>}</div>;
         })}
       </div>
       <div className="pk-total">Total del pedido: {fmt(total)}</div>
@@ -1536,8 +1536,8 @@ function HistorialEnvios({productos, zona}){
   const enZona = p => zona==='todos' || (zona==='monteria' ? esMont(p) : !esMont(p));
   const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const q = norm(busca.trim()); const qd = busca.replace(/\D/g,'');
-  const nomProd = id => { const p = productos.find(x=>x.id===id); return p ? p.nombre.trim() : 'Producto (ya no está en el inventario)'; };
-  const coincide = p => !q || [p.envio_nombre, p.cliente_nombre, p.envio_ciudad, p.envio_direccion, p.skydropx_guia, nomProd(p.producto_id)].some(v=>norm(v).includes(q)) || (qd.length>=4 && [p.envio_telefono, p.envio_cedula, p.cliente_telefono].some(v=>String(v||'').replace(/\D/g,'').includes(qd)));
+  const nomProd = (id, guardado) => { const p = productos.find(x=>x.id===id); return p ? p.nombre.trim() : (guardado ? guardado+' (ya no está en el inventario)' : 'Producto (ya no está en el inventario)'); };
+  const coincide = p => !q || [p.envio_nombre, p.cliente_nombre, p.envio_ciudad, p.envio_direccion, p.skydropx_guia, nomProd(p.producto_id, p.producto_nombre)].some(v=>norm(v).includes(q)) || (qd.length>=4 && [p.envio_telefono, p.envio_cedula, p.cliente_telefono].some(v=>String(v||'').replace(/\D/g,'').includes(qd)));
   const grupos = agruparPedidos(filas.filter(p=>enZona(p) && coincide(p))).sort((a,b)=>new Date(b.base.created_at)-new Date(a.base.created_at));
   const diaDe = iso => { const s = new Date(iso).toLocaleDateString('es-CO',{timeZone:'America/Bogota', weekday:'long', day:'numeric', month:'long', year:'numeric'}); return s.charAt(0).toUpperCase()+s.slice(1); };
   let diaPrev = '';
@@ -1556,7 +1556,7 @@ function HistorialEnvios({productos, zona}){
         return <React.Fragment key={g.id}>{sep}
           <div className="pk-card hecho" style={{opacity:1}}>
             <div className="pk-top"><div className="pk-nombre">{b.envio_nombre || b.cliente_nombre || 'Clienta'}</div><div className="pk-fecha" style={{fontWeight:700,color:'var(--night-2)',textAlign:'right'}}>{(()=>{ const d = new Date(b.created_at); const f = d.toLocaleDateString('es-CO',{timeZone:'America/Bogota', weekday:'short', day:'numeric', month:'short'}).replace(/\./g,''); return f.charAt(0).toUpperCase()+f.slice(1)+' · '+d.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'}); })()}</div></div>
-            <div className="pk-items">{g.filas.map(f=><div className="pk-item" key={f.id}><b>{nomProd(f.producto_id)}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}</div>)}</div>
+            <div className="pk-items">{g.filas.map(f=><div className="pk-item" key={f.id}><b>{nomProd(f.producto_id, f.producto_nombre)}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}</div>)}</div>
             <div className="pk-total">Total del pedido: {fmt(total)}</div>
             {recoge ? <div className="pk-envio"><div className="t">🏬 Recogió en la tienda</div>{b.envio_telefono && <div className="f"><span>Teléfono</span><span>{b.envio_telefono}</span></div>}</div> :
             <div className="pk-envio">
