@@ -486,6 +486,8 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .ch-cita{border-left:3px solid var(--blush-d);background:rgba(0,0,0,.05);border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:14px;color:var(--night-3);}
 .ch-foto{font-weight:700;}
 .alerta-entrega{background:var(--red);color:#fff;font-size:16px;line-height:1.4;padding:12px 1.25rem;}
+.alerta-quitar{margin-left:8px;background:rgba(255,255,255,.18);color:#fff;border:1.5px solid rgba(255,255,255,.7);border-radius:999px;padding:3px 12px;font-family:var(--body);font-size:14px;font-weight:700;cursor:pointer;vertical-align:1px;}
+.alerta-quitar:hover{background:rgba(255,255,255,.3);}
 .ch-img{display:block;max-width:100%;width:260px;max-height:340px;object-fit:cover;border-radius:12px;background:#eee;}
 .pk-revisar{background:var(--amber-l);color:#7a5410;border-radius:12px;padding:12px 14px;font-size:18px;line-height:1.35;margin-top:10px;}
 </style>
@@ -2050,6 +2052,11 @@ function App(){
   const [citasPend, setCitasPend] = useState(0); /* citas */
   useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_citas').select('fecha').eq('estado','pendiente').lte('fecha', hoyCO(1)); if(vivo) setCitasPend((data||[]).length); }catch(e){} }; f(); const t = setInterval(f, 60000); return ()=>{ vivo = false; clearInterval(t); }; },[]);
   const [alertaEnt, setAlertaEnt] = useState(null); /* alerta-entrega */
+  /* quitar-alertas (12-nov): cada aviso rojo se puede quitar. Clientas esperando: se ocultan las que ya se quitaron; si aparece una NUEVA, el aviso vuelve solo con ella. Inventario/atención: se ocultan hasta que el texto cambie. Se recuerda en este dispositivo. */
+  const [quitadas, setQuitadas] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('nf_alertas_quitadas')||'{}'); }catch(e){ return {}; } });
+  const guardarQuitadas = q => { setQuitadas(q); try{ localStorage.setItem('nf_alertas_quitadas', JSON.stringify(q)); }catch(e){} };
+  const quienEspera = txt => String(txt||'').replace(/s+y d+ más.?$/,'').split(/,s*/).map(x=>x.replace(/s*(hace[^)]*)s*$/,'').trim()).filter(Boolean);
+  const esperanNuevas = alertaEnt && alertaEnt.alerta_sin_respuesta ? String(alertaEnt.alerta_sin_respuesta).split(/,s*/).filter(p=>{ const n = p.replace(/s+y d+ más.?$/,'').replace(/s*(hace[^)]*)s*$/,'').trim(); return n && !(quitadas.resp||[]).includes(n); }) : [];
   useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_bot_estado').select('alerta_entrega,alerta_entrega_at,alerta_sin_respuesta,alerta_sin_respuesta_at,alerta_inventario,alerta_inventario_at').eq('id',1).single(); if(vivo) setAlertaEnt(data && (data.alerta_entrega || data.alerta_sin_respuesta || data.alerta_inventario) ? data : null); }catch(e){} }; f(); const t = setInterval(f, 45000); const v = ()=>{ if(document.visibilityState==='visible') f(); }; document.addEventListener('visibilitychange', v); return ()=>{ vivo = false; clearInterval(t); document.removeEventListener('visibilitychange', v); }; },[]);
   useEffect(()=>{
     let vivo = true;
@@ -2139,9 +2146,9 @@ function App(){
         </div>
       </div>
 
-      {alertaEnt && alertaEnt.alerta_inventario && <div className="alerta-entrega"><b>📦 Revisar inventario:</b> {alertaEnt.alerta_inventario}</div>}
-      {alertaEnt && alertaEnt.alerta_sin_respuesta &&<div className="alerta-entrega"><b>⏰ Clientas esperando respuesta:</b> {alertaEnt.alerta_sin_respuesta} <span style={{opacity:.8,fontSize:13}}>(revisado a las {new Date(alertaEnt.alerta_sin_respuesta_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}). Ábrelas en Chats.</span></div>}
-      {alertaEnt && alertaEnt.alerta_entrega && <div className="alerta-entrega"><b>⚠ Atención:</b> {alertaEnt.alerta_entrega}<span style={{opacity:.8,fontSize:13}}>(desde las {new Date(alertaEnt.alerta_entrega_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})})</span></div>}
+      {alertaEnt && alertaEnt.alerta_inventario && quitadas.inv!==alertaEnt.alerta_inventario && <div className="alerta-entrega"><b>📦 Revisar inventario:</b> {alertaEnt.alerta_inventario} <button className="alerta-quitar" onClick={()=>guardarQuitadas({...quitadas, inv:alertaEnt.alerta_inventario})}>✕ Quitar</button></div>}
+      {alertaEnt && alertaEnt.alerta_sin_respuesta && esperanNuevas.length>0 &&<div className="alerta-entrega"><b>⏰ Clientas esperando respuesta:</b> {esperanNuevas.join(', ')} <button className="alerta-quitar" onClick={()=>guardarQuitadas({...quitadas, resp:[...new Set([...(quitadas.resp||[]).slice(-200), ...quienEspera(alertaEnt.alerta_sin_respuesta)])]})}>✕ Quitar</button> <span style={{opacity:.8,fontSize:13}}>(revisado a las {new Date(alertaEnt.alerta_sin_respuesta_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}). Ábrelas en Chats.</span></div>}
+      {alertaEnt && alertaEnt.alerta_entrega && quitadas.ent!==alertaEnt.alerta_entrega && <div className="alerta-entrega"><b>⚠ Atención:</b> {alertaEnt.alerta_entrega} <button className="alerta-quitar" onClick={()=>guardarQuitadas({...quitadas, ent:alertaEnt.alerta_entrega})}>✕ Quitar</button> <span style={{opacity:.8,fontSize:13}}>(desde las {new Date(alertaEnt.alerta_entrega_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})})</span></div>}
       {/* TABS */}
       <div className="tabs">
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
