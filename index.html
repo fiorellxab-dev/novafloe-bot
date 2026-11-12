@@ -1157,7 +1157,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
       </div>
       <div className="pk-total">Total del pedido: {fmt(total)}</div>
       {avisoJefa && <div className="pk-revisar" style={{background:'#FDE8E8',borderColor:'#C0392B'}}><b style={{color:'#C0392B'}}>⏸ {avisoJefa}</b><div><button className="pk-btn sec" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onQuitarAviso(g)}>Ya lo resolví (quitar aviso)</button></div></div>}
-      {deudaEnvio && <div className="pk-revisar"><b>{envioTexto(deudaEnvio)}.</b> {Number(deudaEnvio.envio_valor)===-1 ? 'Confírmalo con la clienta y cóbraselo antes de despachar.' : 'No empaques hasta que lo pague.'}<div><button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onEnvioPagado(g)}>Envío pagado</button></div></div>}
+      {deudaEnvio && <div className="pk-revisar"><b>{envioTexto(deudaEnvio)}.</b> {Number(deudaEnvio.envio_valor)===-1 ? 'Confírmalo con la clienta y cóbraselo antes de despachar.' : (deudaEnvio.envio_cobro_at ? 'Ya se le envió el cobro por WhatsApp'+(deudaEnvio.envio_costo_real ? ' (Skydropx: $'+Number(deudaEnvio.envio_costo_real).toLocaleString('es-CO')+')' : '')+'. Cuando mande el comprobante, el bot lo marca pagado solo.' : 'No empaques hasta que lo pague.')}<div><button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onEnvioPagado(g)}>Envío pagado</button></div></div>}
       {/^Recoge en tienda/i.test(b.envio_direccion||'') ? (
         <div className="pk-envio">
           <div className="t">🏬 RECOGE EN TIENDA — no se envía</div>
@@ -1203,6 +1203,7 @@ function PedidosView({productos}){
   const [zona, setZonaS] = useState(()=>{ try{ return localStorage.getItem('nf_zona_pedidos')||'todos'; }catch(e){ return 'todos'; } });
   const setZona = z => { setZonaS(z); try{ localStorage.setItem('nf_zona_pedidos', z); }catch(e){} };
   const [guias, setGuias] = useState({paso:''});
+  const [cobro, setCobro] = useState({paso:''}); /* cobro-envio-app */
   const [cfgGuias, setCfgGuias] = useState({activa:false, transportadora:'coordinadora'});
   useEffect(()=>{ sb.from('nf_bot_estado').select('skydropx_compra_activa,skydropx_transportadora').eq('id',1).maybeSingle().then(({data})=>{ if(data) setCfgGuias({activa:!!data.skydropx_compra_activa, transportadora:data.skydropx_transportadora||'coordinadora'}); }); },[]);
 
@@ -1293,7 +1294,7 @@ function PedidosView({productos}){
   const cuentaZona = z => agruparPedidos(pedidos.filter(p=>p.estado==='listo_para_enviar' && !p.empacado && enZona(p,z) && !(z!=='todos' && sinZona(p)))).length;
   /* guias-jadens (10-nov): "Comprar e imprimir guias" = cotizar (gratis) → la jefa confirma el total → comprar de a 4 → un PDF 10x15 → imprimir.
      La compra solo funciona si nf_bot_estado.skydropx_compra_activa = true (lo revisa tambien el servidor). Nunca compra dos veces (candado en el servidor). */
-  const esParaGuia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && (!x.skydropx_compra || x.skydropx_compra==='error')) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||'') && !g.filas.some(envioDeuda); };
+  const esParaGuia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && (!x.skydropx_compra || x.skydropx_compra==='error')) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||'') && !g.filas.some(envioDeuda) && g.filas.some(x=>Number(x.envio_valor)>0 && x.envio_pagado===true); /* guia-solo-con-envio-pagado */ };
   const invocar = async body => { const {data, error} = await sb.functions.invoke('skydropx', {body}); if(error){ let m = error.message; try{ const j = await error.context.json(); if(j && j.error) m = j.error; }catch(e){} throw new Error(m); } return data; };
   async function cotizarGuias(){
     if(guias.paso==='cotizando' || guias.paso==='comprando') return;
@@ -1333,6 +1334,66 @@ function PedidosView({productos}){
       return blob;
     }catch(e){ setGuias({...(extra||{}), paso:'error', error:'Las guías se compraron, pero no se pudo armar el PDF: '+(e.message||e)+'. Toca "Imprimir guía" en cada pedido en un minuto.'}); }
   }
+  /* cobro-envio-app (11-nov, pedido de la usuaria y la jefa): el envio se cobra DESPUES de empacar y revisar todo.
+     La jefa toca "Cobrar envíos": se cotiza en Skydropx (gratis), se cobra el siguiente multiplo de $2.000 por encima del valor real
+     (8.713 → 10.000; 10.000 → 12.000), los envios de mas de $15.000 reales salen en rojo y SIN marcar. Al confirmar: se guarda
+     envio_valor en el pedido (el bot ya sabe recibir el comprobante del envio y marcarlo pagado) y el mensaje sale por nf_salientes
+     (texto normal si la clienta escribio en las ultimas 24 h; si no, plantilla de Meta 'nf_cobro_envio'). */
+  const COBRO_CARO = 15000;
+  const valorCobro = precio => Math.floor(Number(precio) / 2000) * 2000 + 2000;
+  const esParaCobro = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && !x.skydropx_compra && !(Number(x.envio_valor) > 0) && x.envio_pagado!==true) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||''); };
+  const resumenItems = g => g.filas.map(f=>{ const p = productos.find(x=>x.id===f.producto_id); return (p ? p.nombre.trim() : 'Jean') + ' talla ' + f.talla + (Number(f.cantidad)>1 ? ' x' + f.cantidad : ''); }).join(', ');
+  async function cotizarCobro(){
+    if(cobro.paso==='cotizando' || cobro.paso==='enviando') return;
+    const lista = empacados.filter(esParaCobro);
+    if(!lista.length){ toast('No hay pedidos empacados de envío nacional sin cobro de envío'); return; }
+    setCobro({paso:'cotizando'});
+    try{
+      const d = await invocar({accion:'cotizar_guias', ids: lista.flatMap(x=>x.filas.map(f=>f.id))});
+      const sel = {}; (d.resultados||[]).forEach(r=>{ if(r.ok && r.precio<=COBRO_CARO) sel[r.clave]=true; });
+      setCobro({paso:'cotizado', cot:d, sel, grupos:lista});
+    }catch(e){ setCobro({paso:'error', error:'No se pudo cotizar: '+(e.message||e)}); }
+  }
+  async function enviarCobros(){
+    const cot = cobro.cot; if(!cot) return;
+    const sel = cobro.sel || {}; const oks = cot.resultados.filter(r=>r.ok && sel[r.clave]);
+    if(!oks.length){ toast('Marca al menos una clienta'); return; }
+    if(!confirm('¿Enviar el cobro del envío a '+oks.length+' clienta(s)?\n\n'+oks.map(r=>'• '+r.nombre+': $'+valorCobro(r.precio).toLocaleString('es-CO')).join('\n')+'\n\nLes llega por WhatsApp con los datos de Nequi para que paguen.')) return;
+    setCobro(c=>({...c, paso:'enviando'}));
+    const res = []; const salientes = [];
+    for(const r of oks){
+      const g = (cobro.grupos||[]).find(x=>x.filas.some(f=>(r.ids||[]).includes(f.id)));
+      const f = (g && g.filas[0]) || {};
+      const valor = valorCobro(r.precio); const vtxt = valor.toLocaleString('es-CO');
+      const nombre = String(f.envio_nombre||'').trim().split(/\s+/)[0] || 'hola';
+      const items = g ? resumenItems(g) : 'tu pedido';
+      const ciudad = String(f.envio_ciudad||'').trim() || String(r.ciudad||'');
+      const texto = 'Hola '+nombre+' 💕 tu pedido de Nova Floe ya está empacado y listo: '+items+'.\n\nEl envío a '+ciudad+' cuesta *$'+vtxt+'*. Para despacharlo, transfiere a:\n\nNequi o llave Bre-B: 3012582216\nTitular: Fiorella Aguirre\nValor: $'+vtxt+'\n\nY envíame por aquí la foto del comprobante. ¡Gracias!';
+      try{
+        const ahora = new Date().toISOString();
+        const u = await sb.from('nf_pedidos').update({envio_valor:valor, envio_pagado:false, envio_costo_real:r.precio, envio_cobro_at:ahora}).in('id', r.ids); if(u.error) throw u.error;
+        const ins = await sb.from('nf_salientes').insert({telefono:f.cliente_telefono, texto, autor:'cobro_envio', plantilla:{name:'nf_cobro_envio', lang:'es', params:[nombre, items, ciudad, vtxt]}}).select('id').single();
+        if(ins.error){ await sb.from('nf_pedidos').update({envio_valor:null, envio_costo_real:null, envio_cobro_at:null}).in('id', r.ids); throw ins.error; }
+        salientes.push({id:ins.data.id, nombre:r.nombre, valor, ids:r.ids});
+      }catch(e){ res.push({nombre:r.nombre, ok:false, error:String(e.message||e)}); }
+    }
+    for(let i=0;i<25 && salientes.some(s=>!s.estado);i++){
+      await new Promise(rr=>setTimeout(rr,1500));
+      const q = await sb.from('nf_salientes').select('id,estado,error').in('id', salientes.map(s=>s.id));
+      (q.data||[]).forEach(x=>{ const s = salientes.find(y=>y.id===x.id); if(s && (x.estado==='enviado' || x.estado==='error')){ s.estado = x.estado; s.error = x.error; } });
+    }
+    /* cobro-no-enviado-se-revierte: si el mensaje no salio (error, o el computador del bot no lo tomo), el pedido vuelve a "sin cobrar"
+       para que no quede como cobrado sin que la clienta se entere. Si el puente ya lo estaba enviando, no se toca. */
+    for(const s of salientes){
+      if(s.estado==='enviado') continue;
+      if(!s.estado){ const c = await sb.from('nf_salientes').update({estado:'error', error:'cancelado: el computador del bot no respondió a tiempo'}).eq('id', s.id).eq('estado','pendiente').select('id'); if(!(c.data && c.data.length)) { s.estado = 'en_curso'; continue; } s.estado = 'error'; s.error = 'el computador del bot no respondió; no se envió'; }
+      await sb.from('nf_pedidos').update({envio_valor:null, envio_costo_real:null, envio_cobro_at:null}).in('id', s.ids);
+      s.error = (s.error||'no se envió') + ' (el pedido quedó otra vez sin cobrar)';
+    }
+    salientes.forEach(s=>res.push({nombre:s.nombre, ok:s.estado==='enviado', valor:s.valor, error: s.estado==='error' ? s.error : (s.estado==='en_curso' ? 'se está enviando; revisa en un minuto en "Falta pagar envío"' : (s.error||null))}));
+    setCobro({paso:'listo', res});
+    setPedidos(await DB.cargarPedidos());
+  }
   async function reimprimir(g){ toast('Preparando la guía…'); const blob = await armarPdf(g.filas.map(f=>f.id), {}); if(blob) imprimirPdf(blob); }
   const porRevisar = agruparPedidos(pz.filter(p=>/^REVISAR:/.test(p.notas||'')));
   const faltanDatos = agruparPedidos(pz.filter(p=>p.estado==='pidiendo_datos_envio'));
@@ -1343,7 +1404,8 @@ function PedidosView({productos}){
   const porEmpacar = sinDeuda.filter(g=>!g.filas.every(f=>f.empacado));
   /* empacados-ayer-y-hoy (10-nov): en "Ya empacados" solo se ven los de ayer y hoy (hora Colombia). Los demas siguen guardados en la base. */
   const _desdeAyer = new Date(hoyCO(-1)+'T00:00:00-05:00').getTime();
-  const empacados = sinDeuda.filter(g=>g.filas.every(f=>f.empacado) && g.filas.some(f=>new Date(f.created_at).getTime() >= _desdeAyer));
+  /* tambien se quedan los que ya pagaron el envio y aun no tienen guia, aunque sean de dias anteriores (cobro-envio-app) */
+  const empacados = sinDeuda.filter(g=>g.filas.every(f=>f.empacado) && (g.filas.some(f=>new Date(f.created_at).getTime() >= _desdeAyer) || g.filas.some(f=>Number(f.envio_valor)>0 && f.envio_pagado===true && f.skydropx_compra!=='ok')));
   const esperando = agruparPedidos(pz.filter(p=>p.estado==='pendiente_confirmacion_humana'));
   const lista = filtro==='aviso' ? conAviso : filtro==='envio' ? porCobrarEnvio : filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : filtro==='datos' ? faltanDatos : empacados;
   const vacio = {listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.', esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.',revisar:'No hay pagos por revisar.',datos:'No hay clientas pendientes de mandar sus datos.'}[filtro];
@@ -1364,7 +1426,7 @@ function PedidosView({productos}){
         {faltanDatos.length>0 && <button className={`pk-chip ${filtro==='datos'?'on':''}`} onClick={()=>setFiltro('datos')}>Faltan datos ({faltanDatos.length})</button>}
       </div>
       {filtro==='aviso' && <div className="pk-nota"><b>Estos pedidos tienen un aviso</b>: léelo antes de despachar. Cuando se resuelva, toca <b>Ya lo resolví</b>.</div>}
-      {filtro==='envio' && <div className="pk-nota">Estas clientas <b>ya pagaron el jean</b> y mandaron sus datos, pero <b>falta que paguen el envío</b> (o domicilio). No las empaques todavía. Cuando llegue su comprobante, toca <b>Envío pagado</b> y pasan solas a "Listo para enviar".</div>}
+      {filtro==='envio' && <div className="pk-nota">Estas clientas <b>ya pagaron el jean</b>, pero <b>falta que paguen el envío</b> (o domicilio). Si ya se les envió el cobro desde "Cobrar envíos", cuando manden el comprobante el bot lo marca pagado solo y el pedido vuelve a <b>Ya empacados</b> para comprar la guía. Si pagan por otro lado, toca <b>Envío pagado</b>.</div>}
       {filtro==='datos' && <div className="pk-nota">Estas clientas <b>ya pagaron</b>, pero todavía no mandan sus datos de envío (o su correo). Escríbeles para que los manden. No se deben empacar hasta tener los datos.</div>}
       {filtro==='revisar' && <div className="pk-nota">Estos pagos se confirmaron solos, pero algo se veía raro (monto distinto, comprobante que no se pudo leer o referencia repetida). Verifícalos en el banco y toca <b>Ya lo revisé</b>.</div>}
       {filtro==='esperando' && <div className="pk-nota">Estos pedidos todavía <b>no se deben empacar</b>: el pago se está revisando. Cuando se confirme, pasan solos a "Listo para enviar".</div>}
@@ -1376,9 +1438,35 @@ function PedidosView({productos}){
           <div style={{fontSize:14,marginTop:8,color:'var(--night-3)'}}>Se crean como órdenes en Skydropx (no se compra nada). Luego entras a Skydropx, compras las guías, las imprimes, las pegas y despachas. Los de Montería, los que recogen en tienda y los que tienen aviso rojo no se suben.</div>
           {resSky && resSky.resultados && resSky.resultados.length>0 && <div style={{marginTop:8,fontSize:15}}>{resSky.resultados.map((r,i)=><div key={i}>{r.ok?'✅':'⚠️'} {r.nombre||''}{r.ok ? ' → '+(r.ciudad||'subido') : ': '+r.error}</div>)}</div>}
         </div>); })()}
+      {filtro==='hechos' && zona!=='monteria' && (()=>{ const n = empacados.filter(esParaCobro).length; const p = cobro.paso; const btn = {minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}; return (
+        <div className="pk-nota" style={{background:'#F1FAF4',borderColor:'#9CCFB0'}}>
+          <div><b>💬 Cobro de envíos:</b> {n>0 ? <>{n} pedido(s) empacado(s) sin cobro de envío.</> : 'No hay pedidos empacados pendientes de cobrar el envío.'}</div>
+          {n>0 && !['cotizando','cotizado','enviando'].includes(p) && <button className="pk-btn ok" style={{...btn,marginTop:10}} onClick={cotizarCobro}>💬 Cobrar envíos ({n})</button>}
+          {p==='cotizando' && <div style={{marginTop:8}}>Consultando el valor del envío de cada pedido en Skydropx…</div>}
+          {p==='cotizado' && cobro.cot && <div style={{marginTop:8,fontSize:15}}>
+            {cobro.cot.resultados.filter(r=>r.ok).length>1 && <div style={{display:'flex',gap:8,marginBottom:6}}>
+              <button className="pk-btn sec" style={{...btn,padding:'8px 12px',fontSize:15}} onClick={()=>setCobro(c=>{ const sel = {}; c.cot.resultados.forEach(r=>{ if(r.ok) sel[r.clave]=true; }); return {...c, sel}; })}>☑️ Marcar todos</button>
+              <button className="pk-btn sec" style={{...btn,padding:'8px 12px',fontSize:15}} onClick={()=>setCobro(c=>({...c, sel:{}}))}>⬜ Desmarcar todos</button>
+            </div>}
+            {cobro.cot.resultados.map((r,i)=><label key={i} style={{...(r.ok && r.precio>COBRO_CARO ? {color:'#C0392B',fontWeight:700} : {}), display:'flex', alignItems:'center', gap:10, padding:'5px 0', cursor: r.ok ? 'pointer' : 'default'}}>
+              {r.ok ? <input type="checkbox" style={{width:22,height:22,flex:'none'}} checked={!!(cobro.sel||{})[r.clave]} onChange={e=>{ const v = e.target.checked; setCobro(c=>({...c, sel:{...(c.sel||{}), [r.clave]:v}})); }}/> : <span style={{width:22,flex:'none',textAlign:'center'}}>⚠️</span>}
+              <span>{r.nombre}{r.ok ? <> → {r.ciudad}: Skydropx ${Number(r.precio).toLocaleString('es-CO')} → <b>cobrar ${valorCobro(r.precio).toLocaleString('es-CO')}</b>{r.precio>COBRO_CARO ? ' 🔴 ENVÍO CARO: revisa qué hacer' : ''}</> : ': '+r.error}</span></label>)}
+            {(()=>{ const m = cobro.cot.resultados.filter(r=>r.ok && (cobro.sel||{})[r.clave]); return <div style={{marginTop:8,fontSize:17}}><b>Marcadas: {m.length} · Total a cobrar ${m.reduce((t,r)=>t+valorCobro(r.precio),0).toLocaleString('es-CO')}</b> <span style={{fontSize:14,color:'var(--night-3)'}}>(solo se les escribe a las marcadas)</span></div>; })()}
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
+              <button className="pk-btn ok" style={btn} onClick={enviarCobros}>💬 Enviar cobro a las marcadas</button>
+              <button className="pk-btn sec" style={btn} onClick={()=>setCobro({paso:''})}>Cerrar</button>
+            </div></div>}
+          {p==='enviando' && <div style={{marginTop:8}}>Enviando los cobros por WhatsApp… No cierres la app.</div>}
+          {p==='listo' && <div style={{marginTop:8,fontSize:15}}>
+            {(cobro.res||[]).map((r,i)=><div key={i}>{r.ok?'✅':'⚠️'} {r.nombre}{r.ok ? ' → cobro de $'+Number(r.valor).toLocaleString('es-CO')+' enviado'+(r.error ? ' ('+r.error+')' : '') : ': '+r.error}</div>)}
+            <div style={{fontSize:14,marginTop:6,color:'var(--night-3)'}}>Los pedidos cobrados pasan a "Falta pagar envío". Cuando la clienta mande el comprobante, el bot lo marca pagado y vuelven aquí para comprar la guía.</div>
+            <button className="pk-btn sec" style={{...btn,marginTop:10}} onClick={()=>setCobro({paso:''})}>Cerrar</button>
+          </div>}
+          {p==='error' && <div style={{marginTop:8,color:'#C0392B'}}>⚠️ {cobro.error} <button className="pk-btn sec" style={{...btn,marginLeft:8,padding:'8px 12px'}} onClick={()=>setCobro({paso:''})}>Cerrar</button></div>}
+        </div>); })()}
       {filtro==='hechos' && zona!=='monteria' && (()=>{ const n = empacados.filter(esParaGuia).length; const T = cfgGuias.transportadora.charAt(0).toUpperCase()+cfgGuias.transportadora.slice(1); const caro = 15000; const p = guias.paso; return (
         <div className="pk-nota" style={{background:'#FFF7EC',borderColor:'#E8C48A'}}>
-          <div><b>🖨️ Guías {T}:</b> {n>0 ? <>{n} pedido(s) empacado(s) de envío nacional sin guía.</> : 'No hay pedidos empacados de envío nacional sin guía.'}{!cfgGuias.activa && <> <i>(La compra se activa después de la prueba; por ahora solo puedes ver cuánto costarían.)</i></>}</div>
+          <div><b>🖨️ Guías {T}:</b> {n>0 ? <>{n} pedido(s) con el envío pagado listos para comprar la guía.</> : 'No hay pedidos con el envío pagado pendientes de guía (primero se cobra el envío).'}{!cfgGuias.activa && <> <i>(La compra se activa después de la prueba; por ahora solo puedes ver cuánto costarían.)</i></>}</div>
           {n>0 && p!=='cotizando' && p!=='comprando' && p!=='pdf' && p!=='cotizado' && <button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={cotizarGuias}>{cfgGuias.activa ? '🖨️ Comprar e imprimir guías ('+n+')' : '💲 Ver cuánto costarían ('+n+')'}</button>}
           {p==='cotizando' && <div style={{marginTop:8}}>Cotizando con {T}…</div>}
           {p==='cotizado' && guias.cot && <div style={{marginTop:8,fontSize:15}}>
