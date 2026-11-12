@@ -467,6 +467,9 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .ch-volver{flex:none;min-width:0;padding:12px 16px;font-size:17px;}
 .ch-wa{text-decoration:none;text-align:center;display:inline-block;}
 .ch-msgs{display:flex;flex-direction:column;gap:6px;padding:14px 1.25rem;}
+.ch-buscar{display:block;width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:999px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236F666C' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") no-repeat 16px center/18px;padding:12px 16px 12px 44px;font-family:var(--body);font-size:17px;color:var(--night);outline:none;-webkit-appearance:none;appearance:none;}
+.ch-buscar:focus{border-color:var(--night);box-shadow:0 0 0 3px rgba(251,166,218,.35);}
+.ch-buscar::placeholder{color:var(--night-3);}
 .ch-dia{align-self:center;font-size:13px;color:var(--night-3);background:var(--white);border:1px solid var(--border);border-radius:999px;padding:3px 12px;margin:8px 0;text-transform:capitalize;}
 .ch-b{max-width:84%;padding:10px 14px;border-radius:16px;font-size:17px;line-height:1.38;white-space:pre-wrap;word-break:break-word;}
 .ch-b.user{align-self:flex-start;background:var(--white);border:1.5px solid var(--border);border-bottom-left-radius:4px;}
@@ -1541,11 +1544,11 @@ function HistorialEnvios({productos, zona}){
   return (
     <div className="pedidos-list">
       <div className="pk-nota" style={{background:'#F7F3F5'}}>📚 <b>Historial de envíos:</b> todos los pedidos empacados desde el inicio (solo para consultar). Busca por nombre, teléfono, cédula, ciudad, dirección, jean o número de guía.</div>
-      <input className="ch-buscar" type="search" value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar: nombre, teléfono, cédula, ciudad, guía…" style={{width:'100%'}}/>
-      <div style={{fontSize:14,color:'var(--night-3)'}}>{grupos.length} envío(s){busca.trim() ? ' encontrados' : ''} · {filas.length} jeans cargados{hayMas ? ' (hay más antiguos abajo)' : ''}</div>
+      <input className="ch-buscar" type="search" value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar: nombre, teléfono, cédula, ciudad, guía…"/>
+      <div style={{fontSize:15,color:'var(--night-2)'}}><b>{grupos.length} envío(s)</b>{busca.trim() ? ' encontrados' : ''} · {zona==='afuera' ? 'solo 🚚 Envío nacional' : zona==='monteria' ? 'solo 🏠 Montería' : 'todos (nacional y Montería)'}{zona!=='todos' ? <span style={{color:'var(--night-3)'}}> — para ver todos toca "Todos" arriba</span> : null}{hayMas ? ' · hay más antiguos abajo' : ''}</div>
       {grupos.length===0 && <div className="empty"><p style={{fontSize:18}}>No hay envíos que coincidan.</p></div>}
       {grupos.map(g=>{
-        const b = g.base; const dia = diaDe(b.created_at); const sep = dia!==diaPrev ? <div key={'d'+g.id} className="ch-dia" style={{alignSelf:'flex-start',fontWeight:700}}>{dia}</div> : null; diaPrev = dia;
+        const b = g.base; const dia = diaDe(b.created_at); const sep = dia!==diaPrev ? <div key={'d'+g.id} className="ch-dia" style={{alignSelf:'flex-start',fontWeight:700,fontSize:15,textTransform:'none',color:'var(--night-2)'}}>{dia}</div> : null; diaPrev = dia;
         const recoge = /^Recoge en tienda/i.test(b.envio_direccion||'');
         const total = g.filas.reduce((s,f)=>s+(Number(f.precio_total)||0),0);
         const conGuia = g.filas.find(f=>f.skydropx_guia);
