@@ -1552,7 +1552,7 @@ function HistorialEnvios({productos, zona}){
         const env = g.filas.find(f=>Number(f.envio_valor)>0);
         return <React.Fragment key={g.id}>{sep}
           <div className="pk-card hecho" style={{opacity:1}}>
-            <div className="pk-top"><div className="pk-nombre">{b.envio_nombre || b.cliente_nombre || 'Clienta'}</div><div className="pk-fecha">{new Date(b.created_at).toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'})}</div></div>
+            <div className="pk-top"><div className="pk-nombre">{b.envio_nombre || b.cliente_nombre || 'Clienta'}</div><div className="pk-fecha" style={{fontWeight:700,color:'var(--night-2)',textAlign:'right'}}>{(()=>{ const d = new Date(b.created_at); const f = d.toLocaleDateString('es-CO',{timeZone:'America/Bogota', weekday:'short', day:'numeric', month:'short'}).replace(/\./g,''); return f.charAt(0).toUpperCase()+f.slice(1)+' · '+d.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'}); })()}</div></div>
             <div className="pk-items">{g.filas.map(f=><div className="pk-item" key={f.id}><b>{nomProd(f.producto_id)}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}</div>)}</div>
             <div className="pk-total">Total del pedido: {fmt(total)}</div>
             {recoge ? <div className="pk-envio"><div className="t">🏬 Recogió en la tienda</div>{b.envio_telefono && <div className="f"><span>Teléfono</span><span>{b.envio_telefono}</span></div>}</div> :
