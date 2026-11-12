@@ -1420,6 +1420,7 @@ function PedidosView({productos}){
         <button className={`pk-chip ${filtro==='listo'?'on':''}`} onClick={()=>setFiltro('listo')}>Listo para enviar ({porEmpacar.length})</button>
         <button className={`pk-chip ${filtro==='esperando'?'on':''}`} onClick={()=>setFiltro('esperando')}>Esperando confirmación ({esperando.length})</button>
         <button className={`pk-chip ${filtro==='hechos'?'on':''}`} onClick={()=>setFiltro('hechos')}>Ya empacados ayer y hoy ({empacados.length})</button>
+        <button className={`pk-chip ${filtro==='historial'?'on':''}`} onClick={()=>setFiltro('historial')}>📚 Historial de envíos</button>
         {porRevisar.length>0 && <button className={`pk-chip ${filtro==='revisar'?'on':''}`} onClick={()=>setFiltro('revisar')}>Por revisar ({porRevisar.length})</button>}
         {conAviso.length>0 && <button className={`pk-chip ${filtro==='aviso'?'on':''}`} onClick={()=>setFiltro('aviso')} style={{background:'#FDE8E8',color:'#C0392B',fontWeight:700}}>⏸ Con aviso ({conAviso.length})</button>}
         {porCobrarEnvio.length>0 && <button className={`pk-chip ${filtro==='envio'?'on':''}`} onClick={()=>setFiltro('envio')}>Falta pagar envío ({porCobrarEnvio.length})</button>}
@@ -1499,6 +1500,7 @@ function PedidosView({productos}){
           </div>}
           {p==='error' && <div style={{marginTop:8,color:'#C0392B'}}>⚠️ {guias.error} <button className="pk-btn sec" style={{marginLeft:8,minWidth:0,flex:'none',padding:'8px 12px'}} onClick={()=>setGuias({paso:''})}>Cerrar</button></div>}
         </div>); })()}
+      {filtro==='historial' ? <HistorialEnvios productos={productos} zona={zona}/> :
       <div className="pedidos-list">
         {cargando
           ? <div className="loading-page"><div className="spinner"/></div>
@@ -1506,7 +1508,70 @@ function PedidosView({productos}){
             ? <div className="empty"><p style={{fontSize:18}}>{vacio}</p></div>
             : lista.map(g=><PedidoEmpaque key={g.id} g={g} productos={productos} onMarcar={marcar} onRevisado={revisado} onEnvioPagado={envioPagado} onQuitarAviso={quitarAviso} puedeSky={!cfgGuias.activa && esParaSky(g)} subiendoSky={subiendoSky} onSky={()=>subirSky(g)} onReimprimir={reimprimir}/>)
         }
-      </div>
+      </div>}
+    </div>
+  );
+}
+
+/* historial-envios (12-nov, pedido de la jefa): TODOS los pedidos empacados desde el inicio, para revisar envíos anteriores
+   (dirección, qué llevaba, guía, envío cobrado). Solo lectura. Carga de a 300 desde la base (no solo los 14 días de Pedidos vendidos). */
+function HistorialEnvios({productos, zona}){
+  const [filas, setFilas] = useState(null);
+  const [hayMas, setHayMas] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const POR = 300;
+  async function cargar(desde){
+    const {data, error} = await sb.from('nf_pedidos').select('*').eq('empacado', true).not('cliente_telefono','like','573990000%').order('created_at',{ascending:false}).range(desde, desde+POR-1);
+    if(error){ toast('Error: '+error.message); return []; }
+    setHayMas((data||[]).length===POR); return data||[];
+  }
+  useEffect(()=>{ cargar(0).then(setFilas); },[]);
+  async function masAntiguos(){ setCargandoMas(true); const d = await cargar((filas||[]).length); setFilas(f=>[...(f||[]), ...d]); setCargandoMas(false); }
+  if(filas===null) return <div className="loading-page"><div className="spinner"/></div>;
+  const esMont = p => /monter[ií]a/i.test(p.envio_ciudad||'') || /^Recoge en tienda/i.test(p.envio_direccion||'');
+  const enZona = p => zona==='todos' || (zona==='monteria' ? esMont(p) : !esMont(p));
+  const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const q = norm(busca.trim()); const qd = busca.replace(/\D/g,'');
+  const nomProd = id => { const p = productos.find(x=>x.id===id); return p ? p.nombre.trim() : 'Producto (ya no está en el inventario)'; };
+  const coincide = p => !q || [p.envio_nombre, p.cliente_nombre, p.envio_ciudad, p.envio_direccion, p.skydropx_guia, nomProd(p.producto_id)].some(v=>norm(v).includes(q)) || (qd.length>=4 && [p.envio_telefono, p.envio_cedula, p.cliente_telefono].some(v=>String(v||'').replace(/\D/g,'').includes(qd)));
+  const grupos = agruparPedidos(filas.filter(p=>enZona(p) && coincide(p))).sort((a,b)=>new Date(b.base.created_at)-new Date(a.base.created_at));
+  const diaDe = iso => { const s = new Date(iso).toLocaleDateString('es-CO',{timeZone:'America/Bogota', weekday:'long', day:'numeric', month:'long', year:'numeric'}); return s.charAt(0).toUpperCase()+s.slice(1); };
+  let diaPrev = '';
+  return (
+    <div className="pedidos-list">
+      <div className="pk-nota" style={{background:'#F7F3F5'}}>📚 <b>Historial de envíos:</b> todos los pedidos empacados desde el inicio (solo para consultar). Busca por nombre, teléfono, cédula, ciudad, dirección, jean o número de guía.</div>
+      <input className="ch-buscar" type="search" value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar: nombre, teléfono, cédula, ciudad, guía…" style={{width:'100%'}}/>
+      <div style={{fontSize:14,color:'var(--night-3)'}}>{grupos.length} envío(s){busca.trim() ? ' encontrados' : ''} · {filas.length} jeans cargados{hayMas ? ' (hay más antiguos abajo)' : ''}</div>
+      {grupos.length===0 && <div className="empty"><p style={{fontSize:18}}>No hay envíos que coincidan.</p></div>}
+      {grupos.map(g=>{
+        const b = g.base; const dia = diaDe(b.created_at); const sep = dia!==diaPrev ? <div key={'d'+g.id} className="ch-dia" style={{alignSelf:'flex-start',fontWeight:700}}>{dia}</div> : null; diaPrev = dia;
+        const recoge = /^Recoge en tienda/i.test(b.envio_direccion||'');
+        const total = g.filas.reduce((s,f)=>s+(Number(f.precio_total)||0),0);
+        const conGuia = g.filas.find(f=>f.skydropx_guia);
+        const env = g.filas.find(f=>Number(f.envio_valor)>0);
+        return <React.Fragment key={g.id}>{sep}
+          <div className="pk-card hecho" style={{opacity:1}}>
+            <div className="pk-top"><div className="pk-nombre">{b.envio_nombre || b.cliente_nombre || 'Clienta'}</div><div className="pk-fecha">{new Date(b.created_at).toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'})}</div></div>
+            <div className="pk-items">{g.filas.map(f=><div className="pk-item" key={f.id}><b>{nomProd(f.producto_id)}</b> · Talla <b>{f.talla}</b> · <b>{f.cantidad}</b> {Number(f.cantidad)===1?'unidad':'unidades'}</div>)}</div>
+            <div className="pk-total">Total del pedido: {fmt(total)}</div>
+            {recoge ? <div className="pk-envio"><div className="t">🏬 Recogió en la tienda</div>{b.envio_telefono && <div className="f"><span>Teléfono</span><span>{b.envio_telefono}</span></div>}</div> :
+            <div className="pk-envio">
+              <div className="t">Datos de envío</div>
+              <div className="f"><span>Nombre</span><span>{b.envio_nombre}</span></div>
+              <div className="f"><span>Cédula</span><span>{b.envio_cedula}</span></div>
+              <div className="f"><span>Teléfono</span><span>{b.envio_telefono}</span></div>
+              <div className="f"><span>Dirección</span><span>{b.envio_direccion}</span></div>
+              <div className="f"><span>Ciudad</span><span>{b.envio_ciudad}</span></div>
+              {b.envio_email && <div className="f"><span>Correo</span><span>{b.envio_email}</span></div>}
+            </div>}
+            {conGuia && <div className="pk-falta" style={{marginTop:10,background:'#E8F3EC',color:'#2F6B4C'}}>🧾 Guía {conGuia.skydropx_transportadora ? conGuia.skydropx_transportadora.charAt(0).toUpperCase()+conGuia.skydropx_transportadora.slice(1) : ''} N.º <b>{conGuia.skydropx_guia}</b>{conGuia.skydropx_costo ? ' · costó $'+Number(conGuia.skydropx_costo).toLocaleString('es-CO') : ''}</div>}
+            {env && <div className="pk-falta" style={{marginTop:10,background:'#F1EEF6',color:'#5B4B73'}}>💬 Envío cobrado: ${Number(env.envio_valor).toLocaleString('es-CO')} · {env.envio_pagado ? 'pagado ✓' : 'sin pagar'}</div>}
+            {g.filas.some(f=>f.skydropx_compra==='contraentrega') && <div className="pk-falta" style={{marginTop:10,background:'#F1EEF6',color:'#5B4B73'}}>📦 Fue contra entrega</div>}
+            {g.filas.some(f=>f.nota_jefa) && <div className="pk-falta" style={{marginTop:10}}>⏸ Aviso: {(g.filas.find(f=>f.nota_jefa)||{}).nota_jefa}</div>}
+          </div></React.Fragment>;
+      })}
+      {hayMas && <button className="pk-btn sec" style={{flex:'none'}} disabled={cargandoMas} onClick={masAntiguos}>{cargandoMas ? 'Cargando…' : 'Ver envíos más antiguos'}</button>}
     </div>
   );
 }
