@@ -608,7 +608,7 @@
   // ================= SE ACTUALIZA SOLA =================
   // Al publicar una version nueva, la pagina abierta (aunque no cierren la pestaña) se recarga sola al volver a ella o cada 2 min,
   // salvo que la clienta este escribiendo o con una ventana abierta (espera a que termine). Una sola recarga por version (sin bucles).
-  var VERSION_APP = '1795112616163';
+  var VERSION_APP = '1795112638194';
   function revisarVersion(){
     if (VERSION_APP.indexOf('__') === 0) return;
     fetch('/chat/version.json?t=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(j){
