@@ -610,7 +610,8 @@
   function b64(s){ var p = '='.repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a; }
   function avisosActivos(){ return pushOk && Notification.permission === 'granted'; }
   function pintarCampana(){ $('btnCampana').classList.toggle('on', avisosActivos()); }
-  function cartaCerrada(){ var t = leer('nf_app_card_off'); return t && Date.now() - t < 3 * 86400000; }
+  function cartaCerrada(){ var t = leer('nf_app_card_off'); return t && Date.now() - t < 86400000; }
+  if (location.hash === '#diag') setTimeout(function(){ alert('diag: ios=' + esIOS + ' movil=' + esMovil + ' instalada=' + instalada + ' appAjena=' + enAppAjena + ' push=' + pushOk + ' cerrada=' + !!cartaCerrada() + ' tarjeta=' + ($('appCard').className) + ' ua=' + navigator.userAgent); }, 1500);
   function pintarAppCard(){
     var c = $('appCard'), mostrar = false;
     if (!cartaCerrada()) {
@@ -621,7 +622,7 @@
   }
   $('appX').onclick = function(){ escribir('nf_app_card_off', Date.now()); pintarAppCard(); };
   $('appOk').onclick = function(){ if (!instalada && (promptInstalar || esMovil)) instalar(); else activarAvisos(); };
-  $('btnCampana').onclick = function(){ if (avisosActivos()) { toast('🔔 Los avisos ya están activados'); suscribir().catch(function(){}); return; } activarAvisos(); };
+  $('btnCampana').onclick = function(){ try { if (esIOS && !instalada) { instalar(); return; } } catch (e) {} if (avisosActivos()) { toast('🔔 Los avisos ya están activados'); suscribir().catch(function(){}); return; } activarAvisos(); };
   async function instalar(){
     if (promptInstalar && !enAppAjena) { promptInstalar.prompt(); try { await promptInstalar.userChoice; } catch(e){} promptInstalar = null; pintarAppCard(); return; }
     var nav = esIOS ? 'Safari' : 'Chrome', pasos;
@@ -649,6 +650,7 @@
     if ($('hojaCopiar')) $('hojaCopiar').onclick = function(){ var l = location.href.split('#')[0]; (navigator.clipboard ? navigator.clipboard.writeText(l) : Promise.reject()).then(function(){ toast('Link copiado: pégalo en ' + nav); }, function(){ prompt('Copia este link y ábrelo en ' + nav + ':', l); }); };
   }
   async function activarAvisos(){
+    if (esIOS && !instalada) { instalar(); return; }
     if (!pushOk) { if (esIOS && !instalada) { instalar(); return; } alert('Este navegador no permite avisos. Prueba desde Chrome o instala la app.'); return; }
     var p = await Notification.requestPermission();
     if (p !== 'granted') { toast('No activaste los avisos'); pintarAppCard(); return; }
