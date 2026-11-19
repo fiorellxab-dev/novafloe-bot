@@ -356,9 +356,11 @@
     $('hojaPedir').onclick = function(){ cerrarHoja(); pedir(); };
   };
   $('btnPedir').onclick = function(){ pedir(); };
-  async function pedir(){
+  var pedirOcupado = false;
+  async function pedir(){ if (pedirOcupado) return; pedirOcupado = true; try { await pedir2(); } finally { setTimeout(function(){ pedirOcupado = false; }, 1500); } }
+  async function pedir2(){
     if (!bolsa.length) return;
-    if (!ses) { pedirDatos(function(){ pedir(); }, 'Para hacer tu pedido'); return; }
+    if (!ses) { pedirDatos(function(){ pedirOcupado = false; pedir(); }, 'Para hacer tu pedido'); return; }
     try { var j = await api('GET', '/web/catalogo'); catalogo = j.productos || catalogo; } catch(e){}
     var cambios = [];
     bolsa = bolsa.filter(function(x){ var p = catalogo.filter(function(z){ return z.id === x.id; })[0]; var d = p ? disp(p, x.talla) : 0; if (d <= 0) { cambios.push(x.nombre + ' talla ' + x.talla + ' ya no está disponible'); return false; } if (x.cant > d) { cambios.push(x.nombre + ' talla ' + x.talla + ': solo quedan ' + d); x.cant = d; } return true; });
