@@ -609,7 +609,7 @@
   // ================= SE ACTUALIZA SOLA =================
   // Al publicar una version nueva, la pagina abierta (aunque no cierren la pestaña) se recarga sola al volver a ella o cada 2 min,
   // salvo que la clienta este escribiendo o con una ventana abierta (espera a que termine). Una sola recarga por version (sin bucles).
-  var VERSION_APP = '1795112769717';
+  var VERSION_APP = '1795112941708';
   function revisarVersion(){
     if (VERSION_APP.indexOf('__') === 0) return;
     fetch('/chat/version.json?t=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(j){
@@ -627,7 +627,7 @@
 
   // ================= APP INSTALABLE + AVISOS =================
   var esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || ((navigator.platform === 'MacIntel' || /Macintosh/.test(navigator.userAgent)) && (navigator.maxTouchPoints > 1 || 'ontouchend' in document));
-  var instalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  var instalada = esIOS ? navigator.standalone === true : (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);  /* 19-nov: en iPhone solo cuenta abrir desde el icono */
   var promptInstalar = null;
   var esMovil = esIOS || /android/i.test(navigator.userAgent);
   var enAppAjena = /Instagram|FBAN|FBAV|FB_IAB|TikTok|musical_ly|Bytedance|Line\/|Snapchat|Twitter/i.test(navigator.userAgent);
