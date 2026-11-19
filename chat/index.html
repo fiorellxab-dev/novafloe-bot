@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#ffffff">
+<title>Nova Floe · Tienda y chat</title>
+<meta name="description" content="Mira los jeans disponibles de Nova Floe con tallas, unidades y precios, y haz tu pedido al instante.">
+<meta property="og:title" content="Nova Floe · Jeans disponibles">
+<meta property="og:description" content="Mira tallas, unidades y precios y pide al instante. Envíos a toda Colombia.">
+<meta property="og:image" content="https://novafloe-bot.vercel.app/chat/icono-512.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="/chat/icono-192.png">
+<link rel="manifest" href="/chat/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nova Floe">
+<link rel="apple-touch-icon" href="/chat/icono-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* marca Nova Floe: blanco, negro y rosado (misma paleta que la app) */
+    --verde:#121212; --verde-btn:#121212; --verde-suave:#FFF1F9; --fondo:#FCF8FA; --burbuja-yo:#FDE2F2; --burbuja-ella:#fff;
+    --texto:#121212; --gris:#7a6f75; --linea:#F2E1EB; --azul-check:#E06BAE; --sombra:0 1px 2px rgba(18,18,18,.08); --naranja:#d6336c;
+    --rosa:#FBA6DA; --rosa-m:#FDD3EC; --rosa-l:#FFF1F9; --negro:#121212;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:var(--fondo);color:var(--texto);font:15px/1.4 "DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  body{display:flex;justify-content:center}
+  button{font-family:inherit}
+  .app{width:100%;max-width:720px;height:100dvh;display:flex;flex-direction:column;background:var(--fondo);position:relative;overflow:hidden}
+  @media (min-width:740px){ body{background:#d1d7db} .app{box-shadow:0 0 18px rgba(0,0,0,.12)} }
+
+  header{background:#fff;color:var(--negro);border-bottom:1px solid var(--linea);padding:calc(env(safe-area-inset-top) + 10px) 14px 0;flex-shrink:0}
+  .top{display:flex;align-items:center;gap:10px;padding-bottom:8px}
+  .avatar{width:42px;height:42px;border-radius:50%;background:#fff center/cover no-repeat;flex-shrink:0;border:2px solid var(--rosa)}
+  .quien{min-width:0}
+  .quien b{display:flex;align-items:center;gap:5px;font-size:16.5px;font-weight:600}
+  .quien small{display:block;font-size:13px;color:var(--gris);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .verif{width:15px;height:15px;flex-shrink:0}
+  .tabs{display:flex}
+  .tabs button{flex:1;background:none;border:0;color:var(--gris);font-size:14.5px;font-weight:600;padding:10px 0 11px;border-bottom:3px solid transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;letter-spacing:.2px}
+  .tabs button.on{color:var(--negro);border-bottom-color:var(--rosa)}
+  .badge{background:var(--rosa);color:var(--negro);font-weight:700;border-radius:10px;font-size:11.5px;min-width:19px;height:19px;padding:0 5px;display:none;align-items:center;justify-content:center}
+  .badge.si{display:inline-flex}
+
+  section{flex:1;min-height:0;display:none;flex-direction:column}
+  section.on{display:flex}
+
+  /* ---------- TIENDA ---------- */
+  #vTienda{overflow-y:auto;padding:10px 10px 110px}
+  .franja{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 10px;scrollbar-width:none}
+  .franja::-webkit-scrollbar{display:none}
+  .franja span{flex-shrink:0;background:#fff;border-radius:16px;padding:6px 11px;font-size:12.5px;color:#3b4a54;box-shadow:var(--sombra)}
+  .card{background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(18,18,18,.06);border:1px solid var(--linea);overflow:hidden;margin-bottom:12px}
+  .cfoto{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;background:#e9edef;cursor:zoom-in}
+  .cbody{padding:12px 14px 14px}
+  .ctop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .ctit{font-size:17.5px;font-weight:700;line-height:1.2}
+  .cprecio{font-size:18px;font-weight:800;color:var(--negro);background:var(--rosa-l);border-radius:10px;padding:2px 9px;white-space:nowrap}
+  .csub{color:var(--gris);font-size:13px;margin-top:3px}
+  .ctit2{font-size:13px;font-weight:600;color:#3b4a54;margin:12px 0 7px}
+  .ctallas{display:flex;flex-wrap:wrap;gap:8px}
+  .ctallas button{min-width:62px;border:1.5px solid #d1d7db;background:#fff;border-radius:12px;padding:7px 8px 6px;cursor:pointer;text-align:center;line-height:1.1}
+  .ctallas button b{display:block;font-size:17px;color:var(--texto)}
+  .ctallas button small{display:block;font-size:11px;color:var(--gris);margin-top:2px}
+  .ctallas button.poco small{color:var(--naranja);font-weight:700}
+  .ctallas button.sel{border-color:var(--negro);background:var(--rosa-m)}
+  .ctallas button.sel b{color:var(--verde)}
+  .cfila{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .medidas{border:0;background:none;color:var(--verde);font-weight:600;font-size:14px;cursor:pointer;padding:4px 0;text-decoration:underline;text-underline-offset:3px}
+  .cant{display:none;align-items:center;border:1.5px solid #d1d7db;border-radius:22px;overflow:hidden;margin-left:auto}
+  .cant.si{display:inline-flex}
+  .cant button{width:36px;height:36px;border:0;background:#fff;font-size:20px;color:var(--verde);cursor:pointer}
+  .cant span{min-width:28px;text-align:center;font-weight:700}
+  .cbtn{width:100%;margin-top:12px;border:0;border-radius:24px;background:var(--verde-btn);color:#fff;font-size:16px;font-weight:700;padding:13px;cursor:pointer}
+  .cbtn:disabled{background:#c5cbcf;cursor:default}
+  .vacio,.cargando{text-align:center;color:var(--gris);padding:40px 16px}
+  #bolsaBar{position:absolute;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom) + 12px);background:var(--verde);color:#fff;border-radius:16px;padding:10px 10px 10px 16px;display:none;align-items:center;gap:10px;box-shadow:0 6px 18px rgba(0,0,0,.22);z-index:3}
+  #bolsaBar.si{display:flex}
+  #bolsaBar .bt{flex:1;min-width:0;cursor:pointer}
+  #bolsaBar .bt b{display:block;font-size:15.5px}
+  #bolsaBar .bt small{opacity:.9;font-size:12.5px}
+  #bolsaBar button.pedir{border:0;background:var(--rosa);color:var(--negro);font-weight:800;font-size:15px;border-radius:22px;padding:11px 16px;cursor:pointer;white-space:nowrap}
+
+  /* ---------- CHAT ---------- */
+  #lista{flex:1;overflow-y:auto;padding:10px 4% 8px;background-color:var(--fondo);
+    background-image:radial-gradient(rgba(251,166,218,.28) 1.2px,transparent 1.3px),radial-gradient(rgba(251,166,218,.18) 1px,transparent 1.1px);
+    background-size:22px 22px,34px 34px;background-position:0 0,11px 17px}
+  .dia{text-align:center;margin:8px 0}
+  .dia span{background:#fff;color:var(--gris);font-size:12.5px;padding:5px 12px;border-radius:8px;box-shadow:var(--sombra);display:inline-block}
+  .aviso{background:var(--rosa-l);color:#5b4f55;border:1px solid var(--rosa-m);font-size:12.5px;text-align:center;padding:7px 12px;border-radius:8px;margin:6px auto 10px;max-width:92%;box-shadow:var(--sombra)}
+  .fila{display:flex;margin:2px 0}
+  .fila.yo{justify-content:flex-end}
+  .b{max-width:82%;padding:6px 8px 7px 9px;border-radius:8px;box-shadow:var(--sombra);position:relative;overflow-wrap:anywhere}
+  .ella .b{background:var(--burbuja-ella);border-top-left-radius:0}
+  .yo .b{background:var(--burbuja-yo);border-top-right-radius:0}
+  .fila.sigue .b{border-radius:8px}
+  .ella .b.cola::before{content:"";position:absolute;top:0;left:-8px;border-style:solid;border-color:var(--burbuja-ella) var(--burbuja-ella) transparent transparent;border-width:0 8px 10px 0}
+  .yo .b.cola::before{content:"";position:absolute;top:0;right:-8px;border-style:solid;border-color:var(--burbuja-yo) transparent transparent var(--burbuja-yo);border-width:0 0 10px 8px}
+  .meta{float:right;margin:6px 0 -4px 10px;font-size:11px;color:var(--gris);display:inline-flex;align-items:center;gap:3px;line-height:1}
+  .check{width:16px;height:11px;color:#8696a0}
+  .check.leido{color:var(--azul-check)}
+  .b img.foto{display:block;width:100%;max-width:300px;min-width:180px;border-radius:6px;margin:-2px -3px 4px;cursor:zoom-in;background:#e9edef;aspect-ratio:4/5;object-fit:cover}
+  .b a{color:#027eb5;text-decoration:underline}
+  .escribiendo .b{padding:10px 14px}
+  .puntos{display:inline-flex;gap:4px}
+  .puntos i{width:7px;height:7px;border-radius:50%;background:#8696a0;animation:salto 1.2s infinite}
+  .puntos i:nth-child(2){animation-delay:.15s}.puntos i:nth-child(3){animation-delay:.3s}
+  @keyframes salto{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-4px);opacity:1}}
+  .extra{max-width:82%;background:#fff;border-radius:12px;box-shadow:var(--sombra);padding:12px 13px;margin:4px 0 8px;border-left:4px solid var(--rosa)}
+  .extra h4{font-size:14.5px;margin-bottom:8px}
+  .extra .lin{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0;font-size:14px}
+  .extra .lin b{font-size:16px}
+  .extra .mini{border:1.5px solid var(--negro);background:var(--rosa-l);color:var(--negro);border-radius:16px;padding:5px 11px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .extra .grande{width:100%;margin-top:9px;border:0;border-radius:22px;background:var(--verde-btn);color:#fff;font-size:15px;font-weight:700;padding:11px;cursor:pointer}
+  .entrar-chat{background:#fff;border-radius:14px;box-shadow:var(--sombra);padding:18px;margin:24px auto;max-width:340px;text-align:center}
+  .entrar-chat p{color:var(--gris);font-size:14px;margin:6px 0 14px}
+  #atajos{display:flex;gap:7px;overflow-x:auto;padding:6px 10px 2px;flex-shrink:0;scrollbar-width:none}
+  #atajos::-webkit-scrollbar{display:none}
+  #atajos button{flex-shrink:0;border:1px solid var(--rosa-m);background:#fff;color:var(--negro);border-radius:18px;padding:7px 13px;font-size:14px;font-weight:500;cursor:pointer;box-shadow:var(--sombra)}
+  .barra{display:flex;align-items:flex-end;gap:7px;padding:6px 8px calc(env(safe-area-inset-bottom) + 7px);flex-shrink:0}
+  .caja{flex:1;display:flex;align-items:flex-end;background:#fff;border-radius:24px;box-shadow:var(--sombra);min-height:46px;padding:0 4px 0 14px}
+  #texto{flex:1;border:0;outline:0;resize:none;font:16px/1.35 inherit;font-family:inherit;max-height:120px;padding:12px 0;background:transparent;color:var(--texto)}
+  .ico{width:42px;height:46px;border:0;background:transparent;color:#54656f;display:grid;place-items:center;cursor:pointer;flex-shrink:0}
+  .ico svg{width:24px;height:24px}
+  #enviar{width:48px;height:48px;border-radius:50%;border:0;background:var(--verde-btn);color:#fff;display:grid;place-items:center;cursor:pointer;flex-shrink:0;box-shadow:var(--sombra)}
+  #enviar svg{width:22px;height:22px;margin-left:2px}
+  #estado{position:absolute;top:calc(env(safe-area-inset-top) + 112px);left:50%;transform:translateX(-50%);background:#fff;color:#54656f;font-size:13px;padding:6px 12px;border-radius:14px;box-shadow:var(--sombra);display:none;z-index:4}
+
+  /* ---------- hoja inferior ---------- */
+  #fondoHoja{position:absolute;inset:0;background:rgba(11,20,26,.45);display:none;z-index:8}
+  #hoja{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:18px 18px 0 0;padding:8px 18px calc(env(safe-area-inset-bottom) + 18px);z-index:9;transform:translateY(105%);transition:transform .22s ease;max-height:88%;overflow-y:auto}
+  #hoja.on{transform:none}
+  #hoja .asa{width:40px;height:4px;border-radius:2px;background:#d1d7db;margin:2px auto 12px}
+  #hoja h3{font-size:18px;margin-bottom:4px}
+  #hoja .sub{color:var(--gris);font-size:13.5px;margin-bottom:10px}
+  #hoja label{display:block;font-size:13.5px;color:#3b4a54;margin:10px 2px 5px;font-weight:600}
+  #hoja input{width:100%;border:1.5px solid #d1d7db;border-radius:12px;padding:12px 13px;font:16px inherit;font-family:inherit;outline:none;color:var(--texto)}
+  #hoja input:focus{border-color:var(--verde-btn)}
+  #hoja .acc{width:100%;margin-top:16px;border:0;border-radius:24px;background:var(--verde-btn);color:#fff;font-size:16px;font-weight:700;padding:14px;cursor:pointer}
+  #hoja .acc:disabled{opacity:.6}
+  #hoja .nota{font-size:12.5px;color:var(--gris);margin-top:10px;text-align:center}
+  #hoja .error{color:#d93025;font-size:13.5px;margin-top:8px;min-height:1em}
+  .item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--linea)}
+  .item img{width:48px;height:60px;object-fit:cover;border-radius:8px;background:#e9edef}
+  .item .it{flex:1;min-width:0;font-size:14px}
+  .item .it b{display:block;font-size:14.5px}
+  .item .quitar{border:0;background:none;color:#d93025;font-size:13px;font-weight:600;cursor:pointer}
+  .total{display:flex;justify-content:space-between;font-weight:800;font-size:16px;margin-top:12px}
+
+  .campana{margin-left:auto;width:40px;height:40px;border-radius:50%;border:1.5px solid var(--linea);background:#fff;display:grid;place-items:center;cursor:pointer;flex-shrink:0;font-size:18px;position:relative}
+  .campana.on{background:var(--rosa-l);border-color:var(--rosa)}
+  .campana.on::after{content:"";position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:#2ecc71;border:1.5px solid #fff}
+  #appCard{display:none;background:#121212;color:#fff;border-radius:16px;padding:13px 14px;margin:0 2px 12px;align-items:center;gap:12px;position:relative}
+  #appCard.si{display:flex}
+  #appCard img{width:44px;height:44px;border-radius:12px;background:#fff;flex-shrink:0}
+  #appCard .t{flex:1;min-width:0;font-size:13.5px;line-height:1.3}
+  #appCard .t b{display:block;font-size:15px;margin-bottom:2px}
+  #appCard button.ok{border:0;background:var(--rosa);color:#121212;font-weight:800;border-radius:20px;padding:9px 13px;font-size:14px;cursor:pointer;white-space:nowrap}
+  #appCard button.x{position:absolute;top:4px;right:8px;border:0;background:none;color:#aaa;font-size:18px;cursor:pointer}
+  .paso{display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14.5px}
+  .paso span{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--rosa-m);display:grid;place-items:center;font-weight:800}
+  #visor{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+  #visor img{max-width:100%;max-height:100%;border-radius:4px}
+  #visor.abierto{display:flex}
+  #toast{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 92px);transform:translateX(-50%) translateY(20px);background:#111b21;color:#fff;font-size:14px;padding:10px 16px;border-radius:20px;opacity:0;transition:.2s;z-index:12;pointer-events:none;white-space:nowrap}
+  #toast.si{opacity:1;transform:translateX(-50%)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="top">
+      <div class="avatar" id="avatarTop"></div>
+      <div class="quien">
+        <b>Nova Floe
+          <svg class="verif" viewBox="0 0 24 24" aria-label="Tienda oficial"><path fill="#FBA6DA" d="M12 1.5l2.6 1.9 3.2-.2 1 3.1 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3.1-3.2-.2L12 22.5l-2.6-1.9-3.2.2-1-3.1-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3.1 3.2.2z"/><path fill="#121212" d="M10.4 15.6l-3.1-3.1 1.3-1.3 1.8 1.8 4.9-4.9 1.3 1.3z"/></svg>
+        </b>
+        <small id="sub">en línea · respondemos al instante</small>
+      </div>
+      <button class="campana" id="btnCampana" aria-label="Activar avisos" title="Avisos de jeans nuevos y de tus mensajes">🔔</button>
+    </div>
+    <nav class="tabs">
+      <button id="tabTienda" class="on">👖 Jeans</button>
+      <button id="tabChat">💬 Chat <span class="badge" id="badgeChat">1</span></button>
+    </nav>
+  </header>
+
+  <!-- TIENDA -->
+  <section id="vTienda" class="on">
+    <div id="appCard"><img src="/chat/icono-192.png" alt=""><div class="t"><b id="appTit">Instala la app de Nova Floe</b><span id="appTxt">Entérate primero cuando lleguen jeans nuevos y de las últimas unidades.</span></div><button class="ok" id="appOk">Instalar</button><button class="x" id="appX" aria-label="Cerrar">×</button></div>
+    <div class="franja">
+      <span>🚚 Envíos a toda Colombia</span>
+      <span>🏠 Montería: domicilio $7.000</span>
+      <span>💳 Nequi o llave Bre-B</span>
+      <span>📦 Por mayor desde 6 jeans</span>
+    </div>
+    <div id="productos"><div class="cargando">Cargando los jeans disponibles…</div></div>
+  </section>
+  <div id="bolsaBar">
+    <div class="bt" id="verBolsa"><b id="bolsaTxt">Tu pedido</b><small>Toca para ver o cambiar</small></div>
+    <button class="pedir" id="btnPedir">Pedir ahora →</button>
+  </div>
+
+  <!-- CHAT -->
+  <section id="vChat">
+    <div id="estado">Reconectando…</div>
+    <div id="lista" aria-live="polite"></div>
+    <div id="atajos"></div>
+    <div class="barra" id="barra">
+      <div class="caja">
+        <textarea id="texto" rows="1" placeholder="Mensaje" aria-label="Escribe tu mensaje"></textarea>
+        <button class="ico" id="btnFoto" aria-label="Mandar una foto o el comprobante">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8.8a3.7 3.7 0 1 0 0 7.4 3.7 3.7 0 0 0 0-7.4zm8-3.3h-2.7l-1.6-1.8a1.6 1.6 0 0 0-1.2-.5H9.5c-.5 0-.9.2-1.2.5L6.7 5.5H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-11c0-1.1-.9-2-2-2zM12 17.7a5.2 5.2 0 1 1 0-10.4 5.2 5.2 0 0 1 0 10.4z"/></svg>
+        </button>
+      </div>
+      <button id="enviar" aria-label="Enviar"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4l17.5-7.5c.8-.4.8-1.5 0-1.9L3.4 3.6c-.7-.3-1.4.2-1.4.9L2 9.1c0 .5.4.9.9 1l12.1 1.9-12.1 1.9c-.5.1-.9.5-.9 1v4.6c0 .7.7 1.2 1.4.9z"/></svg></button>
+      <input type="file" id="archivo" accept="image/*" hidden>
+    </div>
+  </section>
+
+  <div id="fondoHoja"></div>
+  <div id="hoja" role="dialog" aria-modal="true"><div class="asa"></div><div id="hojaCont"></div></div>
+  <div id="toast"></div>
+</div>
+<div id="visor"><img alt="Foto"></div>
+
+<script>
+(function(){
+  'use strict';
+  var LOGO = '/chat/icono-192.png', NEQUI = '3012582216';
+  var $ = function(id){ return document.getElementById(id); };
+  $('avatarTop').style.backgroundImage = 'url(' + LOGO + ')';
+  function leer(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch(e){ return null; } }
+  function escribir(k, v){ try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+  function pesos(n){ return '$' + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  var toastT; function toast(t){ var e = $('toast'); e.textContent = t; e.classList.add('si'); clearTimeout(toastT); toastT = setTimeout(function(){ e.classList.remove('si'); }, 2200); }
+  var API = (/(^|\.)novabot\.fyi$/.test(location.hostname) || location.port === '3099') ? '' : 'https://novabot.fyi';
+  var SB = 'https://rkmhmzlbpbsdihuiofkv.supabase.co', SBK = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrbWhtemxicGJzZGlodWlvZmt2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0NjcxNjQsImV4cCI6MjEwNzA0MzE2NH0.9FX6_K6Am7budpWgJG4X164lCH93Hl6XVssSqwmQVu8';
+  var SBH = { apikey: SBK, Authorization: 'Bearer ' + SBK };
+  function caido(e){ return !e || !e.status || e.status >= 500; } // el PC no respondió (apagado, reiniciando, sin internet)
+  async function api(metodo, ruta, cuerpo){
+    var ctl = new AbortController(), to = setTimeout(function(){ ctl.abort(); }, 15000), r;
+    try { r = await fetch(API + ruta, { method: metodo, headers: cuerpo ? {'Content-Type':'application/json'} : {}, body: cuerpo ? JSON.stringify(cuerpo) : undefined, signal: ctl.signal }); }
+    catch (e) { var e0 = new Error('Sin conexión con la tienda'); e0.status = 0; throw e0; }
+    finally { clearTimeout(to); }
+    var j = {}; try { j = await r.json(); } catch(e){}
+    if (!r.ok) { var er = new Error(j.error || ('Error ' + r.status)); er.status = r.status; throw er; }
+    return j;
+  }
+  function verFoto(src){ $('visor').querySelector('img').src = src; $('visor').classList.add('abierto'); }
+  $('visor').onclick = function(){ this.classList.remove('abierto'); };
+
+  var ses = leer('nf_chat_web'), bolsa = leer('nf_bolsa') || [], catalogo = [];
+
+  // ================= PESTAÑAS =================
+  var vista = 'tienda';
+  function ir(v){
+    vista = v;
+    $('tabTienda').classList.toggle('on', v === 'tienda'); $('tabChat').classList.toggle('on', v === 'chat');
+    $('vTienda').classList.toggle('on', v === 'tienda'); $('vChat').classList.toggle('on', v === 'chat');
+    pintarBolsa();
+    if (v === 'chat') { $('badgeChat').classList.remove('si'); sinLeer = 0; prepararChat(); setTimeout(abajo, 30); }
+  }
+  $('tabTienda').onclick = function(){ ir('tienda'); };
+  $('tabChat').onclick = function(){ ir('chat'); };
+
+  // ================= TIENDA =================
+  async function cargarCatalogo(){
+    try { catalogo = await catalogoDirecto(); pintarCatalogo(); return; } catch (e0) {}
+    try { var j = await api('GET', '/web/catalogo'); catalogo = j.productos || []; pintarCatalogo(); }
+    catch (e) { if (!catalogo.length) $('productos').innerHTML = '<div class="vacio">No pude cargar los jeans. Revisa tu internet y vuelve a intentar.<br><br><button class="cbtn" style="max-width:220px" onclick="location.reload()">Intentar otra vez</button></div>'; }
+  }
+  var medidasOk = {};
+  async function catalogoDirecto(){
+    var rs = await Promise.all([
+      fetch(SB + '/rest/v1/nf_productos?select=id,nombre,precio,foto_url,tallas,categoria,linea&order=nombre', { headers: SBH }).then(function(r){ if (!r.ok) throw new Error('catalogo'); return r.json(); }),
+      fetch(SB + '/rest/v1/nf_reservas_activas', { headers: SBH }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; })
+    ]);
+    var res = {}; (rs[1] || []).forEach(function(x){ res[x.producto_id + '|' + x.talla] = Number(x.cantidad_reservada) || 0; });
+    var orden = function(t){ return isNaN(Number(t)) ? 100 + ['XS','S','M','L','XL','XXL'].indexOf(String(t).toUpperCase()) : Number(t); };
+    var lista = [];
+    for (var i = 0; i < (rs[0] || []).length; i++) {
+      var p = rs[0][i]; if (!(Number(p.precio) >= 1000)) continue;
+      var tallas = [];
+      Object.keys(p.tallas || {}).forEach(function(t){ var libre = Math.max(0, (parseInt(p.tallas[t]) || 0) - (res[p.id + '|' + t] || 0)); if (libre > 0) tallas.push({ t: t, n: libre }); });
+      if (!tallas.length) continue;
+      tallas.sort(function(a, b){ return orden(a.t) - orden(b.t); });
+      lista.push({ id: p.id, nombre: String(p.nombre || '').trim(), precio: Number(p.precio), foto: p.foto_url || null, categoria: p.categoria || 'Jeans', linea: p.linea || '', tallas: tallas, medidas: null });
+    }
+    await Promise.all(lista.map(function(p){
+      var url = SB + '/storage/v1/object/public/nf-fotos/medidas/' + p.id + '.jpg';
+      if (medidasOk[p.id] !== undefined) { p.medidas = medidasOk[p.id] ? url : null; return; }
+      return fetch(url, { method: 'HEAD' }).then(function(r){ medidasOk[p.id] = r.ok; p.medidas = r.ok ? url : null; }).catch(function(){ medidasOk[p.id] = false; });
+    }));
+    return lista;
+  }
+  var selec = {}; // id -> {t, cant}
+  function disp(p, t){ var x = (p.tallas || []).filter(function(z){ return z.t === t; })[0]; return x ? x.n : 0; }
+  function enBolsa(id, t){ return bolsa.filter(function(x){ return x.id === id && x.talla === t; }).reduce(function(s, x){ return s + x.cant; }, 0); }
+  function pintarCatalogo(){
+    var c = $('productos');
+    if (!catalogo.length) { c.innerHTML = '<div class="vacio">En este momento no hay jeans disponibles. Escríbenos por el chat y te contamos qué llega pronto 💚</div>'; return; }
+    c.innerHTML = '';
+    catalogo.forEach(function(p){
+      var total = p.tallas.reduce(function(s, z){ return s + z.n; }, 0);
+      var card = document.createElement('div'); card.className = 'card';
+      var h = '';
+      if (p.foto) h += '<img class="cfoto" loading="lazy" src="' + esc(p.foto) + '" alt="' + esc(p.nombre) + '">';
+      h += '<div class="cbody"><div class="ctop"><div class="ctit">' + esc(p.nombre) + '</div><div class="cprecio">' + pesos(p.precio) + '</div></div>';
+      h += '<div class="csub">' + (total <= 5 ? '🔥 ¡Quedan solo ' + total + '!' : total + ' unidades disponibles') + '</div>';
+      h += '<div class="ctit2">Elige tu talla</div><div class="ctallas">';
+      p.tallas.forEach(function(z){ h += '<button type="button" data-t="' + esc(z.t) + '" class="' + (z.n <= 2 ? 'poco' : '') + '"><b>' + esc(z.t) + '</b><small>' + (z.n <= 2 ? (z.n === 1 ? '¡Última!' : '¡Últimas 2!') : z.n + ' disp.') + '</small></button>'; });
+      h += '</div><div class="cfila">' + (p.medidas ? '<button type="button" class="medidas">📏 Ver medidas</button>' : '') +
+           '<div class="cant"><button type="button" data-d="-1" aria-label="Menos">−</button><span>1</span><button type="button" data-d="1" aria-label="Más">+</button></div></div>';
+      h += '<button type="button" class="cbtn" disabled>Elige una talla</button></div>';
+      card.innerHTML = h;
+      var foto = card.querySelector('.cfoto'); if (foto) foto.onclick = function(){ verFoto(p.foto); };
+      var med = card.querySelector('.medidas'); if (med) med.onclick = function(){ verFoto(p.medidas); };
+      var btn = card.querySelector('.cbtn'), cant = card.querySelector('.cant'), cantN = cant.querySelector('span');
+      var s = selec[p.id] || (selec[p.id] = { t: null, cant: 1 });
+      function refrescar(){
+        card.querySelectorAll('.ctallas button').forEach(function(b){ b.classList.toggle('sel', b.getAttribute('data-t') === s.t); });
+        cant.classList.toggle('si', !!s.t); cantN.textContent = s.cant;
+        var libre = s.t ? disp(p, s.t) - enBolsa(p.id, s.t) : 0;
+        btn.disabled = !s.t || libre <= 0;
+        btn.textContent = !s.t ? 'Elige una talla' : (libre <= 0 ? 'Ya tienes todas en tu pedido' : 'Lo quiero · ' + pesos(p.precio * s.cant));
+      }
+      card.querySelectorAll('.ctallas button').forEach(function(b){ b.onclick = function(){ s.t = b.getAttribute('data-t'); s.cant = 1; refrescar(); }; });
+      cant.querySelectorAll('button').forEach(function(b){ b.onclick = function(){ var max = Math.max(1, disp(p, s.t) - enBolsa(p.id, s.t)); s.cant = Math.min(max, Math.max(1, s.cant + Number(b.getAttribute('data-d')))); refrescar(); }; });
+      btn.onclick = function(){
+        if (!s.t) return;
+        var ya = bolsa.filter(function(x){ return x.id === p.id && x.talla === s.t; })[0];
+        if (ya) ya.cant += s.cant; else bolsa.push({ id: p.id, nombre: p.nombre, talla: s.t, cant: s.cant, precio: p.precio, foto: p.foto });
+        escribir('nf_bolsa', bolsa); toast('✓ Agregado a tu pedido'); s.t = null; s.cant = 1; refrescar(); pintarBolsa();
+        if (navigator.vibrate) navigator.vibrate(30);
+      };
+      refrescar(); c.appendChild(card);
+    });
+  }
+  function totalBolsa(){ return bolsa.reduce(function(s, x){ return s + x.precio * x.cant; }, 0); }
+  function unidades(){ return bolsa.reduce(function(s, x){ return s + x.cant; }, 0); }
+  function pintarBolsa(){
+    var n = unidades();
+    $('bolsaBar').classList.toggle('si', n > 0 && vista === 'tienda');
+    $('bolsaTxt').textContent = '🛍️ ' + n + (n === 1 ? ' jean' : ' jeans') + ' · ' + pesos(totalBolsa());
+  }
+  $('verBolsa').onclick = function(){
+    var h = '<h3>Tu pedido</h3><div class="sub">Revisa antes de pedir. Puedes quitar lo que no quieras.</div>';
+    bolsa.forEach(function(x, i){ h += '<div class="item">' + (x.foto ? '<img src="' + esc(x.foto) + '" alt="">' : '') + '<div class="it"><b>' + esc(x.nombre) + '</b>Talla ' + esc(x.talla) + ' · ' + x.cant + (x.cant === 1 ? ' unidad' : ' unidades') + ' · ' + pesos(x.precio * x.cant) + '</div><button class="quitar" data-i="' + i + '">Quitar</button></div>'; });
+    h += '<div class="total"><span>Total jeans</span><span>' + pesos(totalBolsa()) + '</span></div><div class="nota">El envío se confirma después (Montería: domicilio $7.000).</div>';
+    h += '<button class="acc" id="hojaPedir">Pedir ahora →</button>';
+    abrirHoja(h);
+    document.querySelectorAll('#hojaCont .quitar').forEach(function(b){ b.onclick = function(){ bolsa.splice(Number(b.getAttribute('data-i')), 1); escribir('nf_bolsa', bolsa); pintarBolsa(); pintarCatalogo(); if (bolsa.length) $('verBolsa').onclick(); else cerrarHoja(); }; });
+    $('hojaPedir').onclick = function(){ cerrarHoja(); pedir(); };
+  };
+  $('btnPedir').onclick = function(){ pedir(); };
+  async function pedir(){
+    if (!bolsa.length) return;
+    if (!ses) { pedirDatos(function(){ pedir(); }, 'Para hacer tu pedido'); return; }
+    try { var j = await api('GET', '/web/catalogo'); catalogo = j.productos || catalogo; } catch(e){}
+    var cambios = [];
+    bolsa = bolsa.filter(function(x){ var p = catalogo.filter(function(z){ return z.id === x.id; })[0]; var d = p ? disp(p, x.talla) : 0; if (d <= 0) { cambios.push(x.nombre + ' talla ' + x.talla + ' ya no está disponible'); return false; } if (x.cant > d) { cambios.push(x.nombre + ' talla ' + x.talla + ': solo quedan ' + d); x.cant = d; } return true; });
+    if (cambios.length) { escribir('nf_bolsa', bolsa); pintarCatalogo(); pintarBolsa(); alert('Ojo: ' + cambios.join('. ') + '.' + (bolsa.length ? ' Ajustamos tu pedido.' : '')); if (!bolsa.length) return; }
+    var txt = 'Hola, quiero hacer este pedido:\n' + bolsa.map(function(x){ return '- ' + x.nombre + ' talla ' + x.talla + ' × ' + x.cant; }).join('\n');
+    bolsa = []; escribir('nf_bolsa', bolsa); pintarBolsa(); pintarCatalogo();
+    ir('chat'); mandarTexto(txt);
+  }
+
+  // ================= HOJA INFERIOR =================
+  function abrirHoja(html){ $('hojaCont').innerHTML = html; $('fondoHoja').style.display = 'block'; requestAnimationFrame(function(){ $('hoja').classList.add('on'); }); }
+  function cerrarHoja(){ $('hoja').classList.remove('on'); $('fondoHoja').style.display = 'none'; }
+  $('fondoHoja').onclick = cerrarHoja;
+
+  function normTel(s){ var d = String(s || '').replace(/\D/g, ''); if (d.indexOf('0057') === 0) d = d.slice(2); if (d.length === 10 && d[0] === '3') d = '57' + d; if (/^573\d{9}$/.test(d)) return d; return (d.length >= 10 && d.length <= 15) ? d : null; }
+  var avisoCola = false;
+  async function encolar(t){
+    var wa = 'webq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    var r = await fetch(SB + '/rest/v1/nf_conversaciones', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }, SBH),
+      body: JSON.stringify({ telefono: ses.id + '@lid', rol: 'user', contenido: t, wa_id: wa, autor: 'web_pendiente:' + (ses.nombre || '') }) });
+    if (!r.ok) throw new Error('no se pudo guardar');
+    if (!avisoCola) { avisoCola = true; var a = document.createElement('div'); a.className = 'aviso'; a.textContent = '✓ Tu mensaje quedó guardado. Tenemos muchos mensajes en este momento; te respondemos aquí apenas podamos.'; insertar(a); abajo(); }
+  }
+  function pedirDatos(luego, titulo){
+    abrirHoja('<h3>' + esc(titulo || 'Para chatear con nosotras') + '</h3><div class="sub">Solo te lo pedimos una vez.</div>' +
+      '<form id="fDatos"><label for="dNom">Tu nombre</label><input id="dNom" autocomplete="given-name" placeholder="Ej: Laura" maxlength="40" required>' +
+      '<label for="dCel">Tu número de WhatsApp</label><input id="dCel" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="Ej: 300 123 4567" maxlength="16" required>' +
+      '<button class="acc" id="dBtn">Continuar</button><div class="error" id="dErr"></div></form>' +
+      '<div class="nota">🔒 Tu número es solo para tu pedido y para contactarte. No te enviamos publicidad.</div>');
+    setTimeout(function(){ $('dNom').focus(); }, 250);
+    $('fDatos').onsubmit = async function(e){
+      e.preventDefault(); $('dBtn').disabled = true; $('dErr').textContent = '';
+      try {
+        var j;
+        try { j = await api('POST', '/web/entrar', { nombre: $('dNom').value, telefono: $('dCel').value }); }
+        catch (e1) {
+          if (!caido(e1)) throw e1;
+          var tel0 = normTel($('dCel').value), nom0 = String($('dNom').value || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+          if (nom0.length < 2) throw new Error('Escribe tu nombre.'); if (!tel0) throw new Error('Escribe tu número de celular (10 dígitos).');
+          j = { id: 'WB.' + tel0, token: null, nombre: nom0, msgs: [] }; // el PC no responde: se guarda la sesión y se conecta luego
+        }
+        ses = { id: j.id, token: j.token, nombre: j.nombre, tel: String(j.id).replace(/\D/g, '') }; escribir('nf_chat_web', ses);
+        (j.msgs || []).forEach(function(m){ pintar(m); if (m.i > ultimo) ultimo = m.i; });
+        cerrarHoja(); empezarSondeo(); if (avisosActivos()) suscribir().catch(function(){}); if (luego) luego();
+      } catch (er) { $('dErr').textContent = er.message || 'No se pudo. Revisa tu internet.'; }
+      finally { var b = $('dBtn'); if (b) b.disabled = false; }
+    };
+  }
+  function formEnvio(){
+    var tel = ses ? String(ses.tel || ses.id || '').replace(/\D/g, '').replace(/^57/, '') : '';
+    abrirHoja('<h3>📦 Datos de envío</h3><div class="sub">Llénalos una vez y los mandamos con tu pedido.</div>' +
+      '<form id="fEnv"><label for="eNom">Nombre completo</label><input id="eNom" autocomplete="name" value="' + esc(ses && ses.nombre || '') + '" required>' +
+      '<label for="eTel">Teléfono</label><input id="eTel" type="tel" inputmode="numeric" autocomplete="tel-national" value="' + esc(tel) + '" required>' +
+      '<label for="eDir">Dirección exacta (con barrio)</label><input id="eDir" autocomplete="street-address" placeholder="Ej: Calle 20 #5-30, barrio Centro" required>' +
+      '<label for="eCiu">Ciudad o municipio</label><input id="eCiu" autocomplete="address-level2" placeholder="Ej: Montería" required>' +
+      '<label for="eMail">Correo electrónico</label><input id="eMail" type="email" autocomplete="email" placeholder="Ej: laura@gmail.com">' +
+      '<button class="acc">Enviar mis datos</button></form><div class="nota">El correo sirve para la guía y las novedades de tu envío.</div>');
+    $('fEnv').onsubmit = function(e){
+      e.preventDefault();
+      var t = 'Mis datos de envío:\nNombre: ' + $('eNom').value.trim() + '\nTeléfono: ' + $('eTel').value.trim() + '\nDirección: ' + $('eDir').value.trim() + '\nCiudad: ' + $('eCiu').value.trim() + ($('eMail').value.trim() ? '\nCorreo: ' + $('eMail').value.trim() : '');
+      cerrarHoja(); mandarTexto(t);
+    };
+  }
+
+  // ================= CHAT =================
+  var lista = $('lista'), ultimo = 0, vistos = {}, timer = null, enVuelo = false, sinLeer = 0, ocultos = 0, ultimoDia = '', ultimoDe = '', ultimoTiendaTxt = '';
+  function abajo(){ lista.scrollTop = lista.scrollHeight; }
+  function cercaDeAbajo(){ return lista.scrollHeight - lista.scrollTop - lista.clientHeight < 160; }
+  function formato(t){
+    var h = esc(t || '');
+    h = h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    h = h.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/g, '$1<b>$2</b>');
+    h = h.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?:;]|$)/g, '$1<i>$2</i>');
+    h = h.replace(/(^|[\s(])~([^~\n]+)~(?=[\s).,!?:;]|$)/g, '$1<s>$2</s>');
+    return h.replace(/\n/g, '<br>');
+  }
+  function hora(ms){ var d = new Date(ms), h = d.getHours(), m = d.getMinutes(), ap = h >= 12 ? 'p. m.' : 'a. m.'; h = h % 12 || 12; return h + ':' + (m < 10 ? '0' : '') + m + ' ' + ap; }
+  function etiquetaDia(ms){ var d = new Date(ms), hoy = new Date(), ay = new Date(); ay.setDate(hoy.getDate() - 1);
+    if (d.toDateString() === hoy.toDateString()) return 'Hoy'; if (d.toDateString() === ay.toDateString()) return 'Ayer';
+    return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long' }); }
+  var CHECK = '<svg class="check" viewBox="0 0 16 11"><path fill="currentColor" d="M11.07.65l-.6-.47a.4.4 0 0 0-.56.07L4.3 7.36 1.8 5.1a.4.4 0 0 0-.56.03l-.5.55a.4.4 0 0 0 .03.56l3.27 3a.4.4 0 0 0 .59-.05l6.5-8a.4.4 0 0 0-.06-.54z"/><path fill="currentColor" d="M15.07.65l-.6-.47a.4.4 0 0 0-.56.07l-6.1 7.5-.68-.62-.89 1.1 1.38 1.27a.4.4 0 0 0 .59-.05l6.92-8.26a.4.4 0 0 0-.06-.54z"/></svg>';
+  function insertar(el){ var e = document.querySelector('.escribiendo'); if (e) lista.insertBefore(el, e); else lista.appendChild(el); }
+  function ponerEscribiendo(si){
+    var e = document.querySelector('.escribiendo');
+    $('sub').textContent = si ? 'escribiendo…' : 'en línea · respondemos al instante';
+    if (si && !e) { var f = document.createElement('div'); f.className = 'fila ella escribiendo'; f.innerHTML = '<div class="b cola"><span class="puntos"><i></i><i></i><i></i></span></div>'; lista.appendChild(f); if (vista === 'chat') abajo(); }
+    if (!si && e) e.remove();
+  }
+  function copiar(t, b){
+    var ok = function(){ var o = b.textContent; b.textContent = '✅ Copiado'; setTimeout(function(){ b.textContent = o; }, 1800); };
+    try { navigator.clipboard.writeText(t).then(ok, function(){ prompt('Copia:', t); }); } catch(e){ prompt('Copia:', t); }
+  }
+  // tarjetas extra bajo los mensajes de la tienda: pago y datos de envío (más fácil que escribir todo)
+  function extras(m){
+    var x = String(m.texto || '');
+    if (x.indexOf(NEQUI) >= 0 && /comprobante/i.test(x) && /(transfiere|valor|pagar|pago)/i.test(x)) {
+      var val = (x.match(/Valor:\s*\$?\s*([\d.]+)/i) || x.match(/\$\s?([\d]{2,3}\.\d{3})/) || [])[1];
+      var tit = (x.match(/Titular:\s*([^\n]+)/i) || [])[1];
+      var d = document.createElement('div'); d.className = 'fila ella';
+      d.innerHTML = '<div class="extra"><h4>💳 Paga así</h4>' +
+        '<div class="lin"><span>Nequi o llave Bre-B<br><b>301 258 2216</b>' + (tit ? '<br><small>' + esc(tit.trim()) + '</small>' : '') + '</span><button class="mini" data-c="' + NEQUI + '">Copiar</button></div>' +
+        (val ? '<div class="lin"><span>Valor<br><b>$' + esc(val) + '</b></span><button class="mini" data-c="' + esc(val.replace(/\./g, '')) + '">Copiar</button></div>' : '') +
+        '<button class="grande">📷 Subir foto del comprobante</button></div>';
+      d.querySelectorAll('.mini').forEach(function(b){ b.onclick = function(){ copiar(b.getAttribute('data-c'), b); }; });
+      d.querySelector('.grande').onclick = function(){ $('archivo').click(); };
+      insertar(d);
+    } else if (/(datos de env[ií]o|Nombre:\s*\n|Direcci[oó]n:)/i.test(x) && !/(ya tengo (todos )?tus datos|qued[oó] guardado|qued[oó] registrado)/i.test(x)) {
+      var e = document.createElement('div'); e.className = 'fila ella';
+      e.innerHTML = '<div class="extra"><h4>📦 Tus datos de envío</h4><div style="font-size:13.5px;color:#54656f">Llénalos en un formulario sencillo, sin escribir todo en un mensaje.</div><button class="grande">📝 Llenar mis datos</button></div>';
+      e.querySelector('.grande').onclick = formEnvio;
+      insertar(e);
+    }
+  }
+  function pintar(m){
+    if (m.i && vistos[m.i]) return; if (m.i) vistos[m.i] = 1;
+    var av = lista.querySelector('.entrar-chat'); if (av) av.remove();
+    var dia = etiquetaDia(m.t || Date.now());
+    if (dia !== ultimoDia) { var dd = document.createElement('div'); dd.className = 'dia'; dd.innerHTML = '<span>' + dia + '</span>'; insertar(dd); ultimoDia = dia; ultimoDe = ''; }
+    var yo = m.de === 'cliente';
+    var f = document.createElement('div'); f.className = 'fila ' + (yo ? 'yo' : 'ella') + (ultimoDe === m.de ? ' sigue' : '');
+    var h = '';
+    if (m.tipo === 'foto' && m.url) h += '<img class="foto" loading="lazy" src="' + esc(m.url) + '" alt="Foto">';
+    if (m.texto) h += '<span>' + formato(m.texto) + '</span>';
+    if (!h) h = '<span>📷 Foto</span>';
+    h += '<span class="meta">' + hora(m.t || Date.now()) + (yo ? CHECK : '') + '</span>';
+    f.innerHTML = '<div class="b' + (ultimoDe === m.de ? '' : ' cola') + '">' + h + '</div>';
+    ultimoDe = m.de; insertar(f);
+    if (!yo) { document.querySelectorAll('.yo .check').forEach(function(c){ c.classList.add('leido'); }); if (m.texto) { ultimoTiendaTxt = m.texto; extras(m); pintarAtajos(); } }
+  }
+  lista.addEventListener('click', function(e){ if (e.target.classList && e.target.classList.contains('foto')) verFoto(e.target.src); });
+
+  // atajos que cambian según la conversación
+  var BASE = [['👖 Ver jeans', function(){ ir('tienda'); }], ['📏 Tallas', '¿Qué tallas tienen?'], ['🚚 Envíos', '¿Cuánto vale el envío?'], ['🙋 Asesora', 'Quiero hablar con una asesora']];
+  function pintarAtajos(){
+    var a = $('atajos'), x = ultimoTiendaTxt, l = [], usados = {};
+    if (/talla/i.test(x) && /\?/.test(x) && !/comprobante/i.test(x)) {
+      (x.match(/\b(4|6|8|10|12|14|16)\b/g) || []).filter(function(v, i, z){ return z.indexOf(v) === i; }).sort(function(p, q){ return p - q; }).slice(0, 6).forEach(function(v){ l.push(['Talla ' + v, 'Talla ' + v]); });
+    }
+    if (/¿\s*(lo|la|te lo|te la)\s+(quieres|aparto|separo|llevas)|¿\s*te (lo|la) (aparto|separo)|¿confirmamos/i.test(x)) { l.push(['✅ Sí, lo quiero', 'Sí, lo quiero']); }
+    if (/(cu[aá]ntas unidades|cu[aá]ntos quieres)/i.test(x)) { l.push(['1 unidad', '1 unidad']); l.push(['2 unidades', '2 unidades']); }
+    a.innerHTML = '';
+    l.concat(BASE).forEach(function(z){
+      if (usados[z[0]]) return; usados[z[0]] = 1;
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = z[0];
+      b.onclick = function(){ if (typeof z[1] === 'function') z[1](); else mandarTexto(z[1]); };
+      a.appendChild(b);
+    });
+    a.scrollLeft = 0;
+  }
+
+  async function conectarPendiente(){
+    try {
+      var j = await api('POST', '/web/entrar', { nombre: ses.nombre, telefono: ses.tel });
+      ses.token = j.token; escribir('nf_chat_web', ses);
+      lista.querySelectorAll('.fila, .dia').forEach(function(x){ x.remove(); }); vistos = {}; ultimo = 0; ultimoDia = ''; ultimoDe = '';
+      (j.msgs || []).forEach(function(m){ pintar(m); if (m.i > ultimo) ultimo = m.i; }); abajo();
+    } catch (e) {}
+  }
+  async function traer(){
+    if (!ses || enVuelo) return; enVuelo = true;
+    if (!ses.token) { try { await conectarPendiente(); } finally { enVuelo = false; } return; }
+    try {
+      var j = await api('GET', '/web/mensajes?id=' + encodeURIComponent(ses.id) + '&token=' + encodeURIComponent(ses.token) + '&desde=' + ultimo + '&visible=' + (document.hidden || vista !== 'chat' ? 0 : 1));
+      $('estado').style.display = 'none';
+      var bajar = cercaDeAbajo(), nuevas = 0;
+      (j.msgs || []).forEach(function(m){ if (!vistos[m.i] && m.de === 'tienda') nuevas++; pintar(m); if (m.i > ultimo) ultimo = m.i; });
+      ponerEscribiendo(!!j.escribiendo);
+      if (nuevas) {
+        if (vista !== 'chat') { sinLeer += nuevas; $('badgeChat').textContent = sinLeer; $('badgeChat').classList.add('si'); toast('💬 Nova Floe te respondió'); }
+        if (document.hidden) { ocultos += nuevas; document.title = '(' + ocultos + ') Nova Floe'; }
+        if (document.hidden || vista !== 'chat') sonar();
+      }
+      if ((bajar || nuevas) && vista === 'chat') abajo();
+    } catch (e) {
+      if (e.status === 401) { escribir('nf_chat_web', null); ses = null; lista.innerHTML = ''; prepararChat(); return; }
+      $('estado').style.display = 'block';
+    } finally { enVuelo = false; }
+  }
+  function empezarSondeo(){ clearTimeout(timer); (function ciclo(){ timer = setTimeout(function(){ traer().then(ciclo); }, document.hidden ? 5000 : 1500); })(); traer(); }
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) { ocultos = 0; document.title = 'Nova Floe · Tienda y chat'; if (ses) traer(); if (vista === 'tienda') cargarCatalogo(); } });
+  var ctxA = null;
+  function sonar(){ try { ctxA = ctxA || new (window.AudioContext || window.webkitAudioContext)(); var o = ctxA.createOscillator(), g = ctxA.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(.07, ctxA.currentTime); g.gain.exponentialRampToValueAtTime(.0001, ctxA.currentTime + .25); o.connect(g); g.connect(ctxA.destination); o.start(); o.stop(ctxA.currentTime + .25); if (navigator.vibrate) navigator.vibrate(60); } catch(e){} }
+
+  function prepararChat(){
+    $('barra').style.display = ses ? 'flex' : 'none'; $('atajos').style.display = ses ? 'flex' : 'none';
+    if (!ses) {
+      if (!lista.querySelector('.entrar-chat')) {
+        lista.innerHTML = '<div class="entrar-chat"><div style="font-size:34px">💬</div><b>Chatea con Nova Floe</b><p>Resolvemos tus dudas de tallas, envíos y pagos al instante.</p><button class="cbtn" id="btnEmpezar">Empezar a chatear</button></div>';
+        $('btnEmpezar').onclick = function(){ pedirDatos(function(){ prepararChat(); if (!ultimo) mandarTexto('Hola'); }); };
+      }
+      return;
+    }
+    if (!lista.querySelector('.aviso')) { var a = document.createElement('div'); a.className = 'aviso'; a.textContent = '🔒 Chat oficial de Nova Floe. Te atiende nuestra asistente virtual y, cuando quieras, una asesora.'; lista.insertBefore(a, lista.firstChild); }
+    pintarAtajos();
+  }
+
+  async function mandarTexto(t){
+    t = String(t || '').trim(); if (!t) return;
+    if (!ses) { pedirDatos(function(){ prepararChat(); mandarTexto(t); }); return; }
+    if (vista !== 'chat') ir('chat');
+    pintar({ de: 'cliente', tipo: 'texto', texto: t, t: Date.now() }); abajo();
+    if (!ses.token) { try { await encolar(t); } catch (e2) { alert('No se pudo enviar. Revisa tu internet e intenta otra vez.'); } return; }
+    try { var r = await api('POST', '/web/enviar', { id: ses.id, token: ses.token, texto: t }); vistos[r.i] = 1; ponerEscribiendo(true); }
+    catch (e) {
+      if (e.status === 401) { escribir('nf_chat_web', null); location.reload(); return; }
+      if (caido(e)) { try { await encolar(t); return; } catch (e2) {} }
+      alert(e.message || 'No se pudo enviar. Revisa tu internet e intenta otra vez.');
+    }
+  }
+  var caja = $('texto');
+  function ajustar(){ caja.style.height = 'auto'; caja.style.height = Math.min(caja.scrollHeight, 120) + 'px'; }
+  caja.addEventListener('input', ajustar);
+  caja.addEventListener('keydown', function(e){ if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer:fine)').matches) { e.preventDefault(); enviarCaja(); } });
+  function enviarCaja(){ var t = caja.value; caja.value = ''; ajustar(); mandarTexto(t); caja.focus(); }
+  $('enviar').onclick = enviarCaja;
+
+  $('btnFoto').onclick = function(){ $('archivo').click(); };
+  $('archivo').onchange = function(){
+    var f = this.files && this.files[0]; this.value = ''; if (!f) return;
+    if (!ses) { pedirDatos(function(){ prepararChat(); }); return; }
+    if (!ses.token) { alert('En este momento no podemos recibir fotos. Escríbenos tu mensaje y en unos minutos podrás mandar la foto.'); return; }
+    var img = new Image(), url = URL.createObjectURL(f);
+    img.onload = async function(){
+      var max = 1600, k = Math.min(1, max / Math.max(img.width, img.height));
+      var c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      var datos = c.toDataURL('image/jpeg', 0.85), pie = caja.value.trim(); caja.value = ''; ajustar();
+      if (vista !== 'chat') ir('chat');
+      pintar({ de: 'cliente', tipo: 'foto', url: datos, texto: pie, t: Date.now() }); abajo();
+      try { var r = await api('POST', '/web/foto', { id: ses.id, token: ses.token, mime: 'image/jpeg', base64: datos.split(',')[1], pie: pie }); vistos[r.i] = 1; ponerEscribiendo(true); }
+      catch (e) { alert(e.message || 'No se pudo enviar la foto. Intenta otra vez.'); }
+    };
+    img.onerror = function(){ alert('No pude abrir esa imagen. Intenta con otra foto.'); };
+    img.src = url;
+  };
+
+  // ================= APP INSTALABLE + AVISOS =================
+  var esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var instalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  var promptInstalar = null;
+  var pushOk = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/chat/sw.js', { scope: '/chat/' }).catch(function(){});
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); promptInstalar = e; pintarAppCard(); });
+  window.addEventListener('appinstalled', function(){ instalada = true; toast('📲 ¡App instalada!'); pintarAppCard(); });
+  function b64(s){ var p = '='.repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a; }
+  function avisosActivos(){ return pushOk && Notification.permission === 'granted'; }
+  function pintarCampana(){ $('btnCampana').classList.toggle('on', avisosActivos()); }
+  function cartaCerrada(){ var t = leer('nf_app_card_off'); return t && Date.now() - t < 3 * 86400000; }
+  function pintarAppCard(){
+    var c = $('appCard'), mostrar = false;
+    if (!cartaCerrada()) {
+      if (!instalada && (promptInstalar || esIOS)) { $('appTit').textContent = 'Instala la app de Nova Floe'; $('appTxt').textContent = 'Te avisamos cuando lleguen jeans nuevos y de las últimas unidades.'; $('appOk').textContent = 'Instalar'; mostrar = true; }
+      else if (pushOk && Notification.permission === 'default') { $('appTit').textContent = '🔔 Activa los avisos'; $('appTxt').textContent = 'Te contamos cuando lleguen jeans nuevos y cuando te respondamos.'; $('appOk').textContent = 'Activar'; mostrar = true; }
+    }
+    c.classList.toggle('si', mostrar); pintarCampana();
+  }
+  $('appX').onclick = function(){ escribir('nf_app_card_off', Date.now()); pintarAppCard(); };
+  $('appOk').onclick = function(){ if (!instalada && (promptInstalar || esIOS)) instalar(); else activarAvisos(); };
+  $('btnCampana').onclick = function(){ if (avisosActivos()) { toast('🔔 Los avisos ya están activados'); suscribir().catch(function(){}); return; } activarAvisos(); };
+  async function instalar(){
+    if (promptInstalar) { promptInstalar.prompt(); try { await promptInstalar.userChoice; } catch(e){} promptInstalar = null; pintarAppCard(); return; }
+    abrirHoja('<h3>📲 Instala la app en tu iPhone</h3><div class="sub">Son 3 toques y te queda el ícono de Nova Floe en tu pantalla.</div>' +
+      '<div class="paso"><span>1</span><div>Toca el botón <b>Compartir</b> (el cuadrito con la flecha hacia arriba) en Safari.</div></div>' +
+      '<div class="paso"><span>2</span><div>Elige <b>“Agregar a inicio”</b>.</div></div>' +
+      '<div class="paso"><span>3</span><div>Toca <b>Agregar</b>. Abre la app desde tu pantalla y activa los avisos con la campanita 🔔.</div></div>' +
+      '<button class="acc" id="hojaOk">Entendido</button>');
+    $('hojaOk').onclick = cerrarHoja;
+  }
+  async function activarAvisos(){
+    if (!pushOk) { if (esIOS && !instalada) { instalar(); return; } alert('Este navegador no permite avisos. Prueba desde Chrome o instala la app.'); return; }
+    var p = await Notification.requestPermission();
+    if (p !== 'granted') { toast('No activaste los avisos'); pintarAppCard(); return; }
+    try { await suscribir(); toast('🔔 ¡Listo! Te avisaremos'); } catch (e) { alert('No pude activar los avisos: ' + (e.message || e)); }
+    pintarAppCard();
+  }
+  async function suscribir(){
+    var reg = await navigator.serviceWorker.ready;
+    var sub = await reg.pushManager.getSubscription();
+    if (!sub) { var k = await api('GET', '/web/push-clave'); if (!k.clave) throw new Error('sin clave'); sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(k.clave) }); }
+    await api('POST', '/web/push-suscribir', { sub: sub.toJSON(), id: ses && ses.id, token: ses && ses.token });
+  }
+
+  // ================= ARRANQUE =================
+  (async function(){
+    cargarCatalogo(); setInterval(function(){ if (vista === 'tienda' && !document.hidden) cargarCatalogo(); }, 60000);
+    pintarBolsa();
+    if (ses && ses.id && !ses.token) { prepararChat(); empezarSondeo(); }
+    else if (ses && ses.id && ses.token) {
+      try {
+        var j = await api('POST', '/web/entrar', { id: ses.id, token: ses.token });
+        (j.msgs || []).forEach(function(m){ pintar(m); if (m.i > ultimo) ultimo = m.i; });
+        empezarSondeo(); prepararChat(); if (avisosActivos()) suscribir().catch(function(){});
+        if ((j.msgs || []).length) ir('chat');
+      } catch (e) { if (caido(e)) { prepararChat(); empezarSondeo(); } else { escribir('nf_chat_web', null); ses = null; prepararChat(); } }
+    } else prepararChat();
+    var qv = new URLSearchParams(location.search).get('v'); if (qv === 'chat' && ses) ir('chat'); else if (qv === 'jeans') ir('tienda');
+    pintarAppCard();
+  })();
+})();
+</script>
+</body>
+</html>
