@@ -153,6 +153,13 @@
   .campana.on::after{content:"";position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:#2ecc71;border:1.5px solid #fff}
   #appCard{display:none;background:#121212;color:#fff;border-radius:16px;padding:13px 14px;margin:0 2px 12px;align-items:center;gap:12px;position:relative}
   #appCard.si{display:flex}
+  #avisoCard{display:none;background:#FDD3EC;color:#121212;border-radius:16px;padding:13px 14px;margin:0 2px 12px;align-items:center;gap:12px;position:relative}
+  #avisoCard.si{display:flex}
+  #avisoCard .ico{width:44px;height:44px;border-radius:12px;background:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px}
+  #avisoCard .t{flex:1;min-width:0;font-size:13.5px;line-height:1.3}
+  #avisoCard .t b{display:block;font-size:15px;margin-bottom:2px}
+  #avisoCard button.ok{border:0;background:#121212;color:#fff;font-weight:800;border-radius:20px;padding:9px 13px;font-size:14px;cursor:pointer;white-space:nowrap}
+  #avisoCard button.x{position:absolute;top:4px;right:8px;border:0;background:none;color:#555;font-size:18px;cursor:pointer}
   #appCard img{width:44px;height:44px;border-radius:12px;background:#fff;flex-shrink:0}
   #appCard .t{flex:1;min-width:0;font-size:13.5px;line-height:1.3}
   #appCard .t b{display:block;font-size:15px;margin-bottom:2px}
@@ -189,6 +196,7 @@
   <!-- TIENDA -->
   <section id="vTienda" class="on">
     <div id="appCard"><img src="/chat/icono-192.png" alt=""><div class="t"><b id="appTit">Instala la app de Nova Floe</b><span id="appTxt">Entérate primero cuando lleguen jeans nuevos y de las últimas unidades.</span></div><button class="ok" id="appOk">Instalar</button><button class="x" id="appX" aria-label="Cerrar">×</button></div>
+    <div id="avisoCard"><div class="ico">🔔</div><div class="t"><b>Activa los avisos</b><span id="avisoTxt">Te contamos cuando lleguen jeans nuevos, de las últimas unidades y cuando te respondamos.</span></div><button class="ok" id="avisoOk">Activar</button><button class="x" id="avisoX" aria-label="Cerrar">×</button></div>
     <div class="franja">
       <span>🚚 Envíos a toda Colombia</span>
       <span>🏠 Montería: domicilio $7.000</span>
@@ -612,16 +620,24 @@
   function pintarCampana(){ $('btnCampana').classList.toggle('on', avisosActivos()); }
   function cartaCerrada(){ var t = leer('nf_app_card_off'); return t && Date.now() - t < 86400000; }
   if (location.hash === '#diag') setTimeout(function(){ alert('diag: ios=' + esIOS + ' movil=' + esMovil + ' instalada=' + instalada + ' appAjena=' + enAppAjena + ' push=' + pushOk + ' cerrada=' + !!cartaCerrada() + ' tarjeta=' + ($('appCard').className) + ' ua=' + navigator.userAgent); }, 1500);
+  function avisoCerrado(){ var t = leer('nf_aviso_card_off'); return t && Date.now() - t < 86400000; }
   function pintarAppCard(){
-    var c = $('appCard'), mostrar = false;
-    if (!cartaCerrada()) {
-      if (!instalada && (promptInstalar || esMovil)) { $('appTit').textContent = 'Instala la app de Nova Floe'; $('appTxt').textContent = 'Te avisamos cuando lleguen jeans nuevos y de las últimas unidades.'; $('appOk').textContent = 'Instalar'; mostrar = true; }
-      else if (pushOk && Notification.permission === 'default') { $('appTit').textContent = '🔔 Activa los avisos'; $('appTxt').textContent = 'Te contamos cuando lleguen jeans nuevos y cuando te respondamos.'; $('appOk').textContent = 'Activar'; mostrar = true; }
-    }
-    c.classList.toggle('si', mostrar); pintarCampana();
+    /* tarjeta 1 (negra): instalar la app */
+    var instalar1 = !cartaCerrada() && !instalada && (promptInstalar || esMovil);
+    if (instalar1) { $('appTit').textContent = '📲 Instala la app de Nova Floe'; $('appTxt').textContent = 'Queda en tu pantalla como una app y entras en un toque.'; $('appOk').textContent = 'Instalar'; }
+    $('appCard').classList.toggle('si', !!instalar1);
+    /* tarjeta 2 (rosada): activar avisos */
+    var iphoneSinApp = esIOS && !instalada;
+    var puedeAvisar = iphoneSinApp || (pushOk && Notification.permission === 'default');
+    var aviso2 = !avisoCerrado() && !avisosActivos() && puedeAvisar;
+    if (aviso2) { $('avisoTxt').textContent = iphoneSinApp ? 'En iPhone los avisos llegan desde la app: instálala y actívalos con la campanita.' : 'Te contamos cuando lleguen jeans nuevos, de las últimas unidades y cuando te respondamos.'; $('avisoOk').textContent = iphoneSinApp ? 'Cómo activarlos' : 'Activar'; }
+    $('avisoCard').classList.toggle('si', !!aviso2);
+    pintarCampana();
   }
   $('appX').onclick = function(){ escribir('nf_app_card_off', Date.now()); pintarAppCard(); };
-  $('appOk').onclick = function(){ if (!instalada && (promptInstalar || esMovil)) instalar(); else activarAvisos(); };
+  $('appOk').onclick = function(){ instalar(); };
+  $('avisoX').onclick = function(){ escribir('nf_aviso_card_off', Date.now()); pintarAppCard(); };
+  $('avisoOk').onclick = function(){ if (esIOS && !instalada) { instalar(); return; } activarAvisos(); };
   $('btnCampana').onclick = function(){ try { if (esIOS && !instalada) { instalar(); return; } } catch (e) {} if (avisosActivos()) { toast('🔔 Los avisos ya están activados'); suscribir().catch(function(){}); return; } activarAvisos(); };
   async function instalar(){
     if (promptInstalar && !enAppAjena) { promptInstalar.prompt(); try { await promptInstalar.userChoice; } catch(e){} promptInstalar = null; pintarAppCard(); return; }
