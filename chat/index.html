@@ -609,7 +609,7 @@
   // ================= SE ACTUALIZA SOLA =================
   // Al publicar una version nueva, la pagina abierta (aunque no cierren la pestaña) se recarga sola al volver a ella o cada 2 min,
   // salvo que la clienta este escribiendo o con una ventana abierta (espera a que termine). Una sola recarga por version (sin bucles).
-  var VERSION_APP = '1795112725892';
+  var VERSION_APP = '1795112769717';
   function revisarVersion(){
     if (VERSION_APP.indexOf('__') === 0) return;
     fetch('/chat/version.json?t=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(j){
@@ -650,7 +650,7 @@
     var iphoneSinApp = esIOS && !instalada;
     var puedeAvisar = iphoneSinApp || (pushOk && Notification.permission === 'default');
     var aviso2 = !avisoCerrado() && !avisosActivos() && puedeAvisar;
-    if (aviso2) { $('avisoTxt').textContent = iphoneSinApp ? 'En iPhone los avisos llegan desde la app: instálala y actívalos con la campanita.' : 'Te contamos cuando lleguen jeans nuevos, de las últimas unidades y cuando te respondamos.'; $('avisoOk').textContent = iphoneSinApp ? 'Cómo activarlos' : 'Activar'; }
+    if (aviso2) { $('avisoTxt').textContent = iphoneSinApp ? 'Jeans nuevos y últimas unidades. En iPhone llegan desde la app.' : 'Jeans nuevos, últimas unidades y nuestras respuestas.'; $('avisoOk').textContent = iphoneSinApp ? 'Ver cómo' : 'Activar'; }
     $('avisoCard').classList.toggle('si', !!aviso2);
     pintarCampana();
   }
