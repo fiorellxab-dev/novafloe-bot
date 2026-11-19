@@ -601,6 +601,8 @@
   var esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var instalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   var promptInstalar = null;
+  var esMovil = esIOS || /android/i.test(navigator.userAgent);
+  var enAppAjena = /Instagram|FBAN|FBAV|FB_IAB|TikTok|musical_ly|Bytedance|Line\/|Snapchat|Twitter/i.test(navigator.userAgent);
   var pushOk = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/chat/sw.js', { scope: '/chat/' }).catch(function(){});
   window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); promptInstalar = e; pintarAppCard(); });
@@ -612,22 +614,39 @@
   function pintarAppCard(){
     var c = $('appCard'), mostrar = false;
     if (!cartaCerrada()) {
-      if (!instalada && (promptInstalar || esIOS)) { $('appTit').textContent = 'Instala la app de Nova Floe'; $('appTxt').textContent = 'Te avisamos cuando lleguen jeans nuevos y de las últimas unidades.'; $('appOk').textContent = 'Instalar'; mostrar = true; }
+      if (!instalada && (promptInstalar || esMovil)) { $('appTit').textContent = 'Instala la app de Nova Floe'; $('appTxt').textContent = 'Te avisamos cuando lleguen jeans nuevos y de las últimas unidades.'; $('appOk').textContent = 'Instalar'; mostrar = true; }
       else if (pushOk && Notification.permission === 'default') { $('appTit').textContent = '🔔 Activa los avisos'; $('appTxt').textContent = 'Te contamos cuando lleguen jeans nuevos y cuando te respondamos.'; $('appOk').textContent = 'Activar'; mostrar = true; }
     }
     c.classList.toggle('si', mostrar); pintarCampana();
   }
   $('appX').onclick = function(){ escribir('nf_app_card_off', Date.now()); pintarAppCard(); };
-  $('appOk').onclick = function(){ if (!instalada && (promptInstalar || esIOS)) instalar(); else activarAvisos(); };
+  $('appOk').onclick = function(){ if (!instalada && (promptInstalar || esMovil)) instalar(); else activarAvisos(); };
   $('btnCampana').onclick = function(){ if (avisosActivos()) { toast('🔔 Los avisos ya están activados'); suscribir().catch(function(){}); return; } activarAvisos(); };
   async function instalar(){
-    if (promptInstalar) { promptInstalar.prompt(); try { await promptInstalar.userChoice; } catch(e){} promptInstalar = null; pintarAppCard(); return; }
-    abrirHoja('<h3>📲 Instala la app en tu iPhone</h3><div class="sub">Son 3 toques y te queda el ícono de Nova Floe en tu pantalla.</div>' +
-      '<div class="paso"><span>1</span><div>Toca el botón <b>Compartir</b> (el cuadrito con la flecha hacia arriba) en Safari.</div></div>' +
-      '<div class="paso"><span>2</span><div>Elige <b>“Agregar a inicio”</b>.</div></div>' +
-      '<div class="paso"><span>3</span><div>Toca <b>Agregar</b>. Abre la app desde tu pantalla y activa los avisos con la campanita 🔔.</div></div>' +
-      '<button class="acc" id="hojaOk">Entendido</button>');
+    if (promptInstalar && !enAppAjena) { promptInstalar.prompt(); try { await promptInstalar.userChoice; } catch(e){} promptInstalar = null; pintarAppCard(); return; }
+    var nav = esIOS ? 'Safari' : 'Chrome', pasos;
+    if (enAppAjena) {
+      pasos = '<h3>📲 Primero ábrela en ' + nav + '</h3><div class="sub">Desde Instagram, TikTok o Facebook no se puede instalar. Es un paso más:</div>' +
+        '<div class="paso"><span>1</span><div>Toca los <b>tres puntos</b> (<b>⋯</b> o <b>⋮</b>) arriba a la derecha.</div></div>' +
+        '<div class="paso"><span>2</span><div>Elige <b>“Abrir en el navegador”</b> o <b>“Abrir en ' + nav + '”</b>.</div></div>' +
+        '<div class="paso"><span>3</span><div>Ahí te sale de nuevo este aviso: toca <b>Instalar</b> y sigue los pasos.</div></div>' +
+        '<button class="acc" id="hojaCopiar">Copiar el link</button><button class="acc" id="hojaOk" style="background:#fff;color:#121212;border:1.5px solid #121212;margin-top:8px">Entendido</button>';
+    } else if (esIOS) {
+      pasos = '<h3>📲 Instala la app en tu iPhone</h3><div class="sub">Son 3 toques y te queda el ícono de Nova Floe en tu pantalla.</div>' +
+        '<div class="paso"><span>1</span><div>Toca el botón <b>Compartir</b> (el cuadrito con la flecha hacia arriba). Si no lo ves, toca primero los <b>tres puntos ⋯</b> de abajo.</div></div>' +
+        '<div class="paso"><span>2</span><div>Baja y elige <b>“Agregar a inicio”</b> (o “Agregar a pantalla de inicio”).</div></div>' +
+        '<div class="paso"><span>3</span><div>Toca <b>Agregar</b>. Abre Nova Floe desde tu pantalla y activa los avisos con la campanita 🔔.</div></div>' +
+        '<button class="acc" id="hojaOk">Entendido</button>';
+    } else {
+      pasos = '<h3>📲 Instala la app en tu celular</h3><div class="sub">Son 2 toques y te queda el ícono de Nova Floe en tu pantalla.</div>' +
+        '<div class="paso"><span>1</span><div>En Chrome, toca los <b>tres puntos ⋮</b> arriba a la derecha.</div></div>' +
+        '<div class="paso"><span>2</span><div>Elige <b>“Instalar app”</b> o <b>“Agregar a pantalla principal”</b> y confirma.</div></div>' +
+        '<div class="paso"><span>3</span><div>Abre Nova Floe desde tu pantalla y activa los avisos con la campanita 🔔.</div></div>' +
+        '<button class="acc" id="hojaOk">Entendido</button>';
+    }
+    abrirHoja(pasos);
     $('hojaOk').onclick = cerrarHoja;
+    if ($('hojaCopiar')) $('hojaCopiar').onclick = function(){ var l = location.href.split('#')[0]; (navigator.clipboard ? navigator.clipboard.writeText(l) : Promise.reject()).then(function(){ toast('Link copiado: pégalo en ' + nav); }, function(){ prompt('Copia este link y ábrelo en ' + nav + ':', l); }); };
   }
   async function activarAvisos(){
     if (!pushOk) { if (esIOS && !instalada) { instalar(); return; } alert('Este navegador no permite avisos. Prueba desde Chrome o instala la app.'); return; }
