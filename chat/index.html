@@ -598,7 +598,7 @@
   };
 
   // ================= APP INSTALABLE + AVISOS =================
-  var esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || ((navigator.platform === 'MacIntel' || /Macintosh/.test(navigator.userAgent)) && (navigator.maxTouchPoints > 1 || 'ontouchend' in document));
   var instalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   var promptInstalar = null;
   var esMovil = esIOS || /android/i.test(navigator.userAgent);
@@ -653,7 +653,7 @@
     if (esIOS && !instalada) { instalar(); return; }
     if (!pushOk) { if (esIOS && !instalada) { instalar(); return; } alert('Este navegador no permite avisos. Prueba desde Chrome o instala la app.'); return; }
     var p = await Notification.requestPermission();
-    if (p !== 'granted') { toast('No activaste los avisos'); pintarAppCard(); return; }
+    if (p !== 'granted') { if (!instalada && (esIOS || !/Android|Chrome|CriOS|Edg|Firefox/i.test(navigator.userAgent))) { instalar(); return; } toast('No activaste los avisos'); pintarAppCard(); return; }
     try { await suscribir(); toast('🔔 ¡Listo! Te avisaremos'); } catch (e) { alert('No pude activar los avisos: ' + (e.message || e)); }
     pintarAppCard();
   }
