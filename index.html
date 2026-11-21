@@ -1677,7 +1677,7 @@ function ChatDetalle({c, onBack, atendido, onAtendido}){
   const revisarHumano = async ()=>{ try{ const {data} = await sb.from('nf_humano').select('id,hasta').in('id', idsHumano).gt('hasta', new Date().toISOString()); setHumano(!!(data && data.length)); }catch(e){} };
   useEffect(()=>{ revisarHumano(); const t = setInterval(()=>{ if(document.visibilityState==='visible') revisarHumano(); }, 15000); return ()=>clearInterval(t); },[c.telefono]);
   const ultUser = (msgs||[]).filter(m=>m.rol==='user').map(m=>new Date(m.created_at).getTime()).sort((a,b)=>b-a)[0] || 0;
-  const ventanaAbierta = ultUser && (Date.now() - ultUser < 24*3600000 - 120000);
+  const ventanaAbierta = /^WB\./.test(String(c.telefono||'')) || (ultUser && (Date.now() - ultUser < 24*3600000 - 120000)); /* web-sin-24h: el chat web no tiene la regla de 24 h */
   async function enviar(){
     const t = texto.trim(); if(!t || (envio && envio.estado==='enviando')) return;
     if(!ventanaAbierta){ toast('Pasaron más de 24 h: WhatsApp no deja escribirle hasta que ella escriba'); return; }
