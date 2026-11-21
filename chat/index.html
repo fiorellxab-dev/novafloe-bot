@@ -548,7 +548,7 @@
       $('estado').style.display = 'block';
     } finally { enVuelo = false; }
   }
-  function empezarSondeo(){ clearTimeout(timer); (function ciclo(){ timer = setTimeout(function(){ traer().then(ciclo); }, document.hidden ? 5000 : 1500); })(); traer(); }
+  function empezarSondeo(){ clearTimeout(timer); (function ciclo(){ timer = setTimeout(function(){ traer().then(ciclo); }, document.hidden ? 5000 : (document.querySelector('.escribiendo') ? 600 : 1500)); })(); traer(); }
   document.addEventListener('visibilitychange', function(){ if (!document.hidden) { ocultos = 0; document.title = 'Nova Floe · Tienda y chat'; if (ses) traer(); if (vista === 'tienda') cargarCatalogo(); } });
   var ctxA = null;
   function sonar(){ try { ctxA = ctxA || new (window.AudioContext || window.webkitAudioContext)(); var o = ctxA.createOscillator(), g = ctxA.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(.07, ctxA.currentTime); g.gain.exponentialRampToValueAtTime(.0001, ctxA.currentTime + .25); o.connect(g); g.connect(ctxA.destination); o.start(); o.stop(ctxA.currentTime + .25); if (navigator.vibrate) navigator.vibrate(60); } catch(e){} }
@@ -609,7 +609,7 @@
   // ================= SE ACTUALIZA SOLA =================
   // Al publicar una version nueva, la pagina abierta (aunque no cierren la pestaña) se recarga sola al volver a ella o cada 2 min,
   // salvo que la clienta este escribiendo o con una ventana abierta (espera a que termine). Una sola recarga por version (sin bucles).
-  var VERSION_APP = '1795112941708';
+  var VERSION_APP = '1795274360602';
   function revisarVersion(){
     if (VERSION_APP.indexOf('__') === 0) return;
     fetch('/chat/version.json?t=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(j){
