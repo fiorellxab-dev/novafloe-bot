@@ -1406,14 +1406,18 @@ function PedidosView({productos}){
   const conAviso = agruparPedidos(pz.filter(p=>p.nota_jefa));
   const porCobrarEnvio = listos.filter(g=>g.filas.some(envioDeuda));
   const sinDeuda = listos.filter(g=>!g.filas.some(envioDeuda));
-  const porEmpacar = sinDeuda.filter(g=>!g.filas.every(f=>f.empacado));
+  /* pestana-mayoreo (23-nov): pedidos de 6 o mas unidades (por mayor) ya pagados y sin empacar van en su propia pestaña,
+     separados de "Listo para enviar", para verificar en el banco que entró todo el dinero antes de empacar */
+  const esMayoreo = g => g.filas.reduce((s,f)=>s+(Number(f.cantidad)||0),0) >= 6;
+  const mayoreoG = agruparPedidos(pz.filter(p=>['pidiendo_datos_envio','listo_para_enviar'].includes(p.estado))).filter(g=>esMayoreo(g) && !g.filas.every(f=>f.empacado));
+  const porEmpacar = sinDeuda.filter(g=>!g.filas.every(f=>f.empacado) && !esMayoreo(g));
   /* empacados-ayer-y-hoy (10-nov): en "Ya empacados" solo se ven los de ayer y hoy (hora Colombia). Los demas siguen guardados en la base. */
   const _desdeAyer = new Date(hoyCO(-1)+'T00:00:00-05:00').getTime();
   /* tambien se quedan los que ya pagaron el envio y aun no tienen guia, aunque sean de dias anteriores (cobro-envio-app) */
   const empacados = sinDeuda.filter(g=>g.filas.every(f=>f.empacado) && (g.filas.some(f=>new Date(f.created_at).getTime() >= _desdeAyer) || g.filas.some(f=>Number(f.envio_valor)>0 && f.envio_pagado===true && f.skydropx_compra!=='ok')));
   const esperando = agruparPedidos(pz.filter(p=>p.estado==='pendiente_confirmacion_humana'));
-  const lista = filtro==='aviso' ? conAviso : filtro==='envio' ? porCobrarEnvio : filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : filtro==='datos' ? faltanDatos : empacados;
-  const vacio = {listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.', esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.',revisar:'No hay pagos por revisar.',datos:'No hay clientas pendientes de mandar sus datos.'}[filtro];
+  const lista = filtro==='mayoreo' ? mayoreoG : filtro==='aviso' ? conAviso :filtro==='envio' ? porCobrarEnvio : filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : filtro==='datos' ? faltanDatos : empacados;
+  const vacio = {mayoreo:'No hay pedidos por mayor pendientes.', listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.',esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.',revisar:'No hay pagos por revisar.',datos:'No hay clientas pendientes de mandar sus datos.'}[filtro];
 
   return (
     <div>
@@ -1423,6 +1427,7 @@ function PedidosView({productos}){
       </div>
       <div className="pk-chips">
         <button className={`pk-chip ${filtro==='listo'?'on':''}`} onClick={()=>setFiltro('listo')}>Listo para enviar ({porEmpacar.length})</button>
+        {mayoreoG.length>0 && <button className={`pk-chip ${filtro==='mayoreo'?'on':''}`} onClick={()=>setFiltro('mayoreo')} style={{background:'#FFF4D6',color:'#8A5A00',fontWeight:700}}>📦 Mayoreo ({mayoreoG.length})</button>}
         <button className={`pk-chip ${filtro==='esperando'?'on':''}`} onClick={()=>setFiltro('esperando')}>Esperando confirmación ({esperando.length})</button>
         <button className={`pk-chip ${filtro==='hechos'?'on':''}`} onClick={()=>setFiltro('hechos')}>Ya empacados ayer y hoy ({empacados.length})</button>
         <button className={`pk-chip ${filtro==='historial'?'on':''}`} onClick={()=>setFiltro('historial')}>📚 Historial de envíos</button>
@@ -1431,6 +1436,7 @@ function PedidosView({productos}){
         {porCobrarEnvio.length>0 && <button className={`pk-chip ${filtro==='envio'?'on':''}`} onClick={()=>setFiltro('envio')}>Falta pagar envío ({porCobrarEnvio.length})</button>}
         {faltanDatos.length>0 && <button className={`pk-chip ${filtro==='datos'?'on':''}`} onClick={()=>setFiltro('datos')}>Faltan datos ({faltanDatos.length})</button>}
       </div>
+      {filtro==='mayoreo' && <div className="pk-nota" style={{background:'#FFF4D6',borderColor:'#E0B44C'}}><b>📦 Pedidos por mayor</b> (6 o más unidades). <b>Antes de empacar</b>, verifica en el banco que entró <b>todo el dinero</b> del pedido (el total aparece en cada tarjeta) y que los datos de envío estén completos. Cuando lo verifiques, empácalo y toca <b>Ya empaqué este pedido</b>.</div>}
       {filtro==='aviso' && <div className="pk-nota"><b>Estos pedidos tienen un aviso</b>: léelo antes de despachar. Cuando se resuelva, toca <b>Ya lo resolví</b>.</div>}
       {filtro==='envio' && <div className="pk-nota">Estas clientas <b>ya pagaron el jean</b>, pero <b>falta que paguen el envío</b> (o domicilio). Si ya se les envió el cobro desde "Cobrar envíos", cuando manden el comprobante el bot lo marca pagado solo y el pedido vuelve a <b>Ya empacados</b> para comprar la guía. Si pagan por otro lado, toca <b>Envío pagado</b>.</div>}
       {filtro==='datos' && <div className="pk-nota">Estas clientas <b>ya pagaron</b>, pero todavía no mandan sus datos de envío (o su correo). Escríbeles para que los manden. No se deben empacar hasta tener los datos.</div>}
