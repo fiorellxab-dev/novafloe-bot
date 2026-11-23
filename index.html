@@ -555,10 +555,21 @@ const DB = {
     if(error) throw error;
     return data||[];
   },
+  /* historial-completo-chats (23-nov): nf_chats_resumen trae maximo 400 chats; aqui se completan TODAS las clientas desde nf_conversaciones */
+  async chatsHistoricos(){
+    const rpc = await DB.chatsResumen(24*3650);
+    const conocidos = new Set(rpc.map(c=>c.telefono));
+    const {count} = await sb.from('nf_conversaciones').select('id',{count:'exact',head:true});
+    const pags = []; for(let o=0;o<(count||0);o+=1000) pags.push(sb.from('nf_conversaciones').select('telefono,created_at').order('id',{ascending:true}).range(o,o+999));
+    const ult = {}; for(const r of await Promise.all(pags)) for(const x of (r.data||[])) if(!ult[x.telefono] || x.created_at > ult[x.telefono]) ult[x.telefono] = x.created_at;
+    const nombres = {}; for(let o=0;o<20000;o+=1000){ const {data} = await sb.from('nf_pedidos').select('cliente_telefono,cliente_nombre,envio_nombre').order('created_at',{ascending:true}).range(o,o+999); (data||[]).forEach(p=>{ const n = String(p.envio_nombre||p.cliente_nombre||'').trim(); if(n && n.length>1) nombres[p.cliente_telefono] = n; }); if(!data || data.length<1000) break; }
+    const extra = Object.entries(ult).filter(([t])=>!conocidos.has(t)).map(([t,at])=>({telefono:t, ultimo_rol:'assistant', ultimo_texto:'Chat anterior: tócalo para leerlo', ultimo_at:at, ultimo_media:false, nombre:nombres[t]||'', telefono_real:null}));
+    return [...rpc, ...extra.sort((a,b)=>String(b.ultimo_at).localeCompare(String(a.ultimo_at)))];
+  },
   async chatMensajes(tel){
     const [m, f] = await Promise.all([
-      sb.from('nf_conversaciones').select('id,rol,contenido,created_at,media_url,foto_publica,autor').eq('telefono',tel).order('created_at',{ascending:false}).limit(250),
-      sb.from('nf_fotos_enviadas').select('id,pie,created_at,url').eq('telefono',tel).order('created_at',{ascending:false}).limit(100)
+      sb.from('nf_conversaciones').select('id,rol,contenido,created_at,media_url,foto_publica,autor').eq('telefono',tel).order('created_at',{ascending:false}).limit(5000), /* historial-completo-chats */
+      sb.from('nf_fotos_enviadas').select('id,pie,created_at,url').eq('telefono',tel).order('created_at',{ascending:false}).limit(1000)
     ]);
     if(m.error) throw m.error;
     const fotos = (f.error ? [] : (f.data||[])).map(x=>({id:'foto-'+x.id, rol:'assistant', contenido:'', foto_pie:x.pie||'', foto_url:x.url||'', created_at:x.created_at}));
@@ -1833,7 +1844,7 @@ function ChatsView({onPend}){
   const [largos, setLargos] = useState(null);
   const [cargandoLargos, setCargandoLargos] = useState(false);
   const largosAt = React.useRef(0);
-  async function cargarLargos(){ if(cargandoLargos || Date.now()-largosAt.current < 60000) return; largosAt.current = Date.now(); setCargandoLargos(true); try{ setLargos((await DB.chatsResumen(24*30)).filter(c=>!/^WB.57399/.test(String(c.telefono||'')))); }catch(e){} setCargandoLargos(false); }
+  async function cargarLargos(){ if(cargandoLargos || Date.now()-largosAt.current < 60000) return; largosAt.current = Date.now(); setCargandoLargos(true); try{ setLargos((await DB.chatsHistoricos()) /* historial-completo-chats */.filter(c=>!/^WB.57399/.test(String(c.telefono||'')))); }catch(e){} setCargandoLargos(false); }
   async function cargar(){
     try{ setChats((await DB.chatsResumen(72)).filter(c=>!/^WB.57399/.test(String(c.telefono||'')))); } /* sin-chats-prueba (23-nov): los chats de prueba de Claude (numeros 57399...) no se muestran */
     catch(e){ toast('Error: '+e.message); setChats(prev=>prev||[]); }
@@ -1858,21 +1869,22 @@ function ChatsView({onPend}){
   const qTxt = _nz(busca), qDig = String(busca||'').replace(/\D/g,'');
   const coincide = c => { if(!qTxt) return true; const nom = _nz(nombreChat(c)+' '+(c.nombre||'')); const dig = String(c.telefono||'').replace(/\D/g,'')+' '+String(c.telefono_real||'').replace(/\D/g,''); return (qTxt.length>=2 && qTxt.split(' ').every(w=>nom.includes(w))) || (qDig.length>=4 && dig.includes(qDig.startsWith('57')&&qDig.length>10 ? qDig.slice(2) : qDig)); };
   const baseBusqueda = (largos && largos.length ? largos : (chats||[]));
-  const lista = qTxt ? baseBusqueda.filter(coincide) : (filtro==='atender' ? pend : (chats||[]));
+  const lista = qTxt ? baseBusqueda.filter(coincide) : (filtro==='atender' ? pend : filtro==='historial' ? (largos||[]) : (chats||[]));
   return (
     <div>
       <div style={{padding:'12px 16px 0'}}>
         <input className="ch-buscar" type="search" value={busca} onChange={e=>{ setBusca(e.target.value); if(e.target.value.trim().length>=2) cargarLargos(); }} placeholder="Buscar chat por nombre o número…" style={{width:'100%',boxSizing:'border-box',fontSize:17,padding:'12px 14px',borderRadius:14,border:'2px solid var(--border)',fontFamily:'inherit',background:'var(--white)'}}/>
-        {qTxt && <div style={{fontSize:14,color:'var(--night-3)',marginTop:6}}>{lista.length} {lista.length===1?'chat encontrado':'chats encontrados'} (últimos 30 días){cargandoLargos?' · buscando…':''} <button onClick={()=>setBusca('')} style={{marginLeft:8,border:'none',background:'none',color:'var(--blush-dd)',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:14}}>Borrar búsqueda</button></div>}
+        {qTxt && <div style={{fontSize:14,color:'var(--night-3)',marginTop:6}}>{lista.length} {lista.length===1?'chat encontrado':'chats encontrados'} (todo el historial){cargandoLargos?' · buscando…':''} <button onClick={()=>setBusca('')} style={{marginLeft:8,border:'none',background:'none',color:'var(--blush-dd)',fontWeight:700,cursor:'pointer',fontFamily:'inherit',fontSize:14}}>Borrar búsqueda</button></div>}
       </div>
       <div className="pk-chips">
         <button className={`pk-chip ${filtro==='atender'?'on':''}`} onClick={()=>setFiltro('atender')}>Por atender ({pend.length})</button>
-        <button className={`pk-chip ${filtro==='todos'?'on':''}`} onClick={()=>setFiltro('todos')}>Todos los chats ({(chats||[]).length})</button>
+        <button className={`pk-chip ${filtro==='todos'?'on':''}`} onClick={()=>setFiltro('todos')}>Últimos 3 días ({(chats||[]).length})</button>
+        <button className={`pk-chip ${filtro==='historial'?'on':''}`} onClick={()=>{ setFiltro('historial'); cargarLargos(); }}>📚 Todo el historial{largos ? ' ('+largos.length+')' : ''}</button>
       </div>
       {filtro==='atender' && <div className="pk-nota">Aquí aparecen las clientas que escribieron y <b>no recibieron respuesta</b>, las que pidieron asesora, los pagos por revisar y las que querían comprar pero no quedó pedido (últimos 3 días). Toca un chat para leerlo.</div>}
       <div className="ch-list">
-        {chats===null ? <div className="loading-page"><div className="spinner"/></div>
-          : lista.length===0 ? <div className="empty"><p style={{fontSize:18}}>{qTxt ? (cargandoLargos ? 'Buscando…' : 'No encontré ningún chat con ese nombre o número en los últimos 30 días.') : filtro==='atender' ? 'Todo al día: no hay clientas esperando.' : 'Todavía no hay chats en los últimos 3 días.'}</p></div>
+        {(chats===null || (filtro==='historial' && !largos && !qTxt)) ? <div className="loading-page"><div className="spinner"/></div>
+          : lista.length===0 ? <div className="empty"><p style={{fontSize:18}}>{qTxt ? (cargandoLargos ? 'Buscando…' : 'No encontré ningún chat con ese nombre o número.') : filtro==='atender' ? 'Todo al día: no hay clientas esperando.' : 'Todavía no hay chats en los últimos 3 días.'}</p></div>
           : lista.map(c=>{
               const tags = etiquetasChat(c);
               const nombre = nombreChat(c);
