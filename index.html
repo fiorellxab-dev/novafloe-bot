@@ -1427,7 +1427,7 @@ function PedidosView({productos}){
       </div>
       <div className="pk-chips">
         <button className={`pk-chip ${filtro==='listo'?'on':''}`} onClick={()=>setFiltro('listo')}>Listo para enviar ({porEmpacar.length})</button>
-        {mayoreoG.length>0 && <button className={`pk-chip ${filtro==='mayoreo'?'on':''}`} onClick={()=>setFiltro('mayoreo')} style={{background:'#FFF4D6',color:'#8A5A00',fontWeight:700}}>📦 Mayoreo ({mayoreoG.length})</button>}
+        {<button className={`pk-chip ${filtro==='mayoreo'?'on':''}`} onClick={()=>setFiltro('mayoreo')} style={{background:'#FFF4D6',color:'#8A5A00',fontWeight:700}}>📦 Mayoreo ({mayoreoG.length})</button>}
         <button className={`pk-chip ${filtro==='esperando'?'on':''}`} onClick={()=>setFiltro('esperando')}>Esperando confirmación ({esperando.length})</button>
         <button className={`pk-chip ${filtro==='hechos'?'on':''}`} onClick={()=>setFiltro('hechos')}>Ya empacados ayer y hoy ({empacados.length})</button>
         <button className={`pk-chip ${filtro==='historial'?'on':''}`} onClick={()=>setFiltro('historial')}>📚 Historial de envíos</button>
