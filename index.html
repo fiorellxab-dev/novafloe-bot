@@ -1142,6 +1142,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
   const deudaEnvio = g.filas.find(envioDeuda);
   const avisoJefa = (g.filas.find(f=>f.nota_jefa)||{}).nota_jefa || ''; /* nota-jefa */
   const nuevo = !empacado && !esperando && (Date.now() - new Date(b.updated_at||b.created_at).getTime() < 120000);
+  const numTel = numeroReal({telefono:b.cliente_telefono, telefono_real:b.telefono_real}); /* tel-clienta */
   async function copiar(){
     const t = `Nombre: ${b.envio_nombre||''}${b.envio_cedula ? '\nCédula: '+b.envio_cedula : ''}\nTeléfono: ${b.envio_telefono||''}\nDirección: ${b.envio_direccion||''}\nCiudad: ${b.envio_ciudad||''}\nCorreo: ${b.envio_email||''}`; /* correo-citas */
     try{ await navigator.clipboard.writeText(t); toast('Datos copiados'); }catch(e){ toast('No se pudo copiar'); }
@@ -1152,6 +1153,8 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
         <div className="pk-nombre">{nombre}{nuevo && <span className="pk-nuevo">NUEVO</span>}</div>
         <div className="pk-fecha">{fechaAmable(b.updated_at||b.created_at)}</div>
       </div>
+      {/* tel-clienta (23-nov): numero de WhatsApp de la clienta, o aviso si WhatsApp lo oculta (entonces se le escribe desde Chats) */}
+      {!/^WB\./.test(String(b.cliente_telefono||'')) && <div style={{fontSize:15,color:'#6B5B73',margin:'-4px 0 8px'}}>📱 {numTel ? <>WhatsApp: <b style={{userSelect:'all'}}>{telBonito(numTel)}</b></> : 'WhatsApp no muestra su número: escríbele con el botón "Ver su chat"'}</div>}
       {notaRev && <div className="pk-revisar"><b>Revisar:</b> {notaRev}<div><button className="pk-btn sec" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onRevisado(g)}>Ya lo revisé</button></div></div>}
       {parcial && <div className="pk-falta">Ojo: {g.filas.filter(f=>f.empacado).length} de {g.filas.length} prendas de esta clienta ya estaban marcadas como empacadas. Revisa que vayan juntos en el mismo paquete.</div>}
       <div className="pk-items">
@@ -1191,6 +1194,7 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
         {g.filas.some(f=>f.skydropx_compra==='ok') && onReimprimir && <button className="pk-btn sec" onClick={()=>onReimprimir(g)}>🖨️ Imprimir guía</button>}
         {puedeSky && !g.filas.some(f=>f.skydropx_compra==='ok') && <button className="pk-btn sec" disabled={subiendoSky} onClick={onSky}>{subiendoSky?'Subiendo…':'📤 Subir a Skydropx'}</button>}
         {b.envio_direccion && !/^Recoge en tienda/i.test(b.envio_direccion) && <button className="pk-btn sec" onClick={copiar}>Copiar datos de envío</button>}
+        {b.cliente_telefono && <button className="pk-btn sec" onClick={()=>abrirChatDe(b.cliente_telefono, b.cliente_nombre||nombre)}>💬 Ver su chat / escribirle</button>}
         {!esperando && !empacado && !deudaEnvio && !avisoJefa && b.estado!=='pidiendo_datos_envio' && <button className="pk-btn ok" onClick={()=>onMarcar(g,true)}>Ya empaqué este pedido</button>}
         {empacado && <button className="pk-btn sec" onClick={()=>onMarcar(g,false)}>Deshacer</button>}
       </div>
@@ -1595,6 +1599,8 @@ function numeroReal(c){
   return /^57\d{10}$/.test(n) ? n : null;
 }
 function telBonito(n){ return n ? '+57 '+n.slice(2,5)+' '+n.slice(5,8)+' '+n.slice(8) : null; }
+/* abrir-chat-desde-pedido (23-nov): el boton "Ver su chat" de un pedido cambia a la pestaña Chats con esa conversacion abierta */
+function abrirChatDe(telefono, nombre){ window._nfAbrirChat = {telefono, nombre: nombre||''}; window.dispatchEvent(new Event('nf-abrir-chat')); }
 function nombreChat(c){ return c.nombre || telBonito(numeroReal(c)) || 'Clienta (número oculto)'; }
 function limpiarPreview(t){
   const s = String(t||'');
@@ -1821,7 +1827,7 @@ function CitasView({onPend}){
 function ChatsView({onPend}){
   const [chats, setChats] = useState(null);
   const [filtro, setFiltro] = useState('atender');
-  const [abierto, setAbierto] = useState(null);
+  const [abierto, setAbierto] = useState(()=>{ const x = window._nfAbrirChat || null; window._nfAbrirChat = null; return x; }); /* abrir-chat-desde-pedido */
   const [vistos, setVistos] = useState(vistosGet());
   const [busca, setBusca] = useState('');
   const [largos, setLargos] = useState(null);
@@ -2053,6 +2059,7 @@ function Login({onLogin}){
 function App(){
   const [auth, setAuth] = useState(()=>{ try{ return sessionStorage.getItem('nf_ok')==='1' || (Date.now() - Number(localStorage.getItem('nf_ok_ts')||0) < 30*864e5); }catch(e){ return false; } });
   const [view, setView] = useState('inventario');
+  useEffect(()=>{ const f = ()=>{ setView('chats'); window.scrollTo(0,0); }; window.addEventListener('nf-abrir-chat', f); return ()=>window.removeEventListener('nf-abrir-chat', f); },[]); /* abrir-chat-desde-pedido */
   const [chatsPend, setChatsPend] = useState(0);
   const [pedPend, setPedPend] = useState(0); /* aviso-pedidos */
   const [citasPend, setCitasPend] = useState(0); /* citas */
