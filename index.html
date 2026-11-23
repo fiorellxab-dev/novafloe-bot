@@ -1827,9 +1827,9 @@ function ChatsView({onPend}){
   const [largos, setLargos] = useState(null);
   const [cargandoLargos, setCargandoLargos] = useState(false);
   const largosAt = React.useRef(0);
-  async function cargarLargos(){ if(cargandoLargos || Date.now()-largosAt.current < 60000) return; largosAt.current = Date.now(); setCargandoLargos(true); try{ setLargos(await DB.chatsResumen(24*30)); }catch(e){} setCargandoLargos(false); }
+  async function cargarLargos(){ if(cargandoLargos || Date.now()-largosAt.current < 60000) return; largosAt.current = Date.now(); setCargandoLargos(true); try{ setLargos((await DB.chatsResumen(24*30)).filter(c=>!/^WB.57399/.test(String(c.telefono||'')))); }catch(e){} setCargandoLargos(false); }
   async function cargar(){
-    try{ setChats(await DB.chatsResumen(72)); }
+    try{ setChats((await DB.chatsResumen(72)).filter(c=>!/^WB.57399/.test(String(c.telefono||'')))); } /* sin-chats-prueba (23-nov): los chats de prueba de Claude (numeros 57399...) no se muestran */
     catch(e){ toast('Error: '+e.message); setChats(prev=>prev||[]); }
   }
   useEffect(()=>{
