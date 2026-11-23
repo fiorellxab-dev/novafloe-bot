@@ -2221,6 +2221,13 @@ function App(){
           <div className="modal">
             <h3>¿Eliminar?</h3>
             <p>Se eliminará "<strong>{confirm.nombre}</strong>" del inventario. Esta acción no se puede deshacer.</p>
+            {/* aviso-borrar-con-stock (23-nov): borrar y volver a crear dejó al bot 3 h diciendo "no hay jeans" y perdió las fotos de medidas */}
+            {Object.values(confirm.tallas||{}).reduce((s,v)=>s+Number(v||0),0)>0 && (
+              <p style={{background:'#fff4e5',border:'1px solid #f5c26b',borderRadius:10,padding:'10px 12px',fontSize:14}}>
+                ⚠️ Este jean tiene <strong>{Object.values(confirm.tallas||{}).reduce((s,v)=>s+Number(v||0),0)} unidades</strong>. Si lo borras, el bot deja de venderlo y se pierde su foto de medidas.<br/>
+                Si solo quieres <strong>cambiar la foto, el precio o las tallas</strong>, cancela y usa <strong>Editar</strong>.
+              </p>
+            )}
             <div className="modal-btns">
               <button className="btn btn-ghost" onClick={()=>setConfirm(null)}>Cancelar</button>
               <button className="btn btn-danger-soft btn-lg" onClick={()=>onDelete(confirm)}>Eliminar</button>
