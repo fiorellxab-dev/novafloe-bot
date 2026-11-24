@@ -512,6 +512,10 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .cu-th{font-weight:800;color:#6B5B73;border-top:none;}
 .cu-tr span:not(:first-child){text-align:right;}
 /* avisos-ordenados (24-nov) */
+.avisos-pag{padding:14px 1.25rem 40px;max-width:860px;}
+.avisos-pag .avisos-box{background:none;border:none;padding:0;}
+.avisos-vacio{background:#F2FAF4;border:1px solid #CDE8D4;border-radius:14px;padding:18px;font-size:17px;font-weight:700;color:#2B5A38;}
+.avisos-vacio span{font-size:14px;font-weight:500;color:#5E7A66;}
 .avisos-box{background:#FFF6F4;border-bottom:1px solid #F1D5D0;padding:12px 1.25rem 14px;}
 .avisos-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:17px;color:var(--red);}
 .avisos-todos,.avisos-mas{background:none;border:none;color:#6B5B73;font-family:var(--body);font-size:14px;font-weight:700;text-decoration:underline;cursor:pointer;padding:4px 0;}
@@ -1679,11 +1683,11 @@ function partirAvisos(texto){
   for(const a of out){ const k = a.tel || a.nombre || a.clave; if(vistos.has(k)){ const prev = res.find(r=>(r.tel||r.nombre||r.clave)===k); if(prev){ prev.veces=(prev.veces||1)+1; prev.claves.push(a.clave); } continue; } vistos.add(k); res.push({...a, veces:1, claves:[a.clave]}); }
   return res;
 }
-function AvisosClientas({texto, quitados, onQuitar, onQuitarTodos}){
+function AvisosClientas({texto, quitados, onQuitar, onQuitarTodos, completo}){
   const [verTodos, setVerTodos] = useState(false);
   const lista = partirAvisos(texto).filter(a=>!a.claves.some(c=>quitados.includes(c)));
   if(!lista.length) return null;
-  const mostrar = verTodos ? lista : lista.slice(0,3);
+  const mostrar = verTodos || completo ? lista : lista.slice(0,3);
   const telVisible = t => /^57\d{10}$/.test(t) ? telBonito(t) : (/^\d{8,}$/.test(t) ? '+'+t : '');
   return (
     <div className="avisos-box">
@@ -1709,7 +1713,7 @@ function AvisosClientas({texto, quitados, onQuitar, onQuitarTodos}){
           </div>
         </div>
       ))}
-      {lista.length>3 && <button className="avisos-mas" onClick={()=>setVerTodos(v=>!v)}>{verTodos ? 'Ver menos' : 'Ver '+(lista.length-3)+' más'}</button>}
+      {!completo && lista.length>3 && <button className="avisos-mas" onClick={()=>setVerTodos(v=>!v)}>{verTodos ? 'Ver menos' : 'Ver '+(lista.length-3)+' más'}</button>}
     </div>
   );
 }
@@ -2249,6 +2253,7 @@ function App(){
   /* quitar-alertas (12-nov): cada aviso rojo se puede quitar. Clientas esperando: se ocultan las que ya se quitaron; si aparece una NUEVA, el aviso vuelve solo con ella. Inventario/atención: se ocultan hasta que el texto cambie. Se recuerda en este dispositivo. */
   const [quitadas, setQuitadas] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('nf_alertas_quitadas')||'{}'); }catch(e){ return {}; } });
   const guardarQuitadas = q => { setQuitadas(q); try{ localStorage.setItem('nf_alertas_quitadas', JSON.stringify(q)); }catch(e){} };
+  /* pestaña-avisos */ const avisosTexto = alertaEnt && alertaEnt.alerta_entrega && quitadas.ent!==alertaEnt.alerta_entrega ? alertaEnt.alerta_entrega : ''; const invPend = !!(alertaEnt && alertaEnt.alerta_inventario && quitadas.inv!==alertaEnt.alerta_inventario); const nAvisos = (avisosTexto ? partirAvisos(avisosTexto).filter(a=>!a.claves.some(c=>(quitadas.avisos||[]).includes(c))).length : 0) + (invPend?1:0);
   const quienEspera = txt => String(txt||'').replace(/s+y d+ más.?$/,'').split(/,s*/).map(x=>x.replace(/s*(hace[^)]*)s*$/,'').trim()).filter(Boolean);
   const esperanNuevas = alertaEnt && alertaEnt.alerta_sin_respuesta ? String(alertaEnt.alerta_sin_respuesta).split(/,s*/).filter(p=>{ const n = p.replace(/s+y d+ más.?$/,'').replace(/s*(hace[^)]*)s*$/,'').trim(); return n && !(quitadas.resp||[]).includes(n); }) : [];
   useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_bot_estado').select('alerta_entrega,alerta_entrega_at,alerta_sin_respuesta,alerta_sin_respuesta_at,alerta_inventario,alerta_inventario_at').eq('id',1).single(); if(vivo) setAlertaEnt(data && (data.alerta_entrega || data.alerta_sin_respuesta || data.alerta_inventario) ? data : null); }catch(e){} }; f(); const t = setInterval(f, 45000); const v = ()=>{ if(document.visibilityState==='visible') f(); }; document.addEventListener('visibilitychange', v); return ()=>{ vivo = false; clearInterval(t); document.removeEventListener('visibilitychange', v); }; },[]);
@@ -2340,23 +2345,25 @@ function App(){
         </div>
       </div>
 
-      {alertaEnt && alertaEnt.alerta_inventario && quitadas.inv!==alertaEnt.alerta_inventario && <div className="alerta-entrega"><b>📦 Revisar inventario:</b> {alertaEnt.alerta_inventario} <button className="alerta-quitar" onClick={()=>guardarQuitadas({...quitadas, inv:alertaEnt.alerta_inventario})}>✕ Quitar</button></div>}
+      {/* pestaña-avisos (24-nov): los avisos ya no van arriba; están en la pestaña "Avisos" */}
       {/* sin-aviso-esperando (12-nov): la usuaria pidió quitar este aviso; las clientas sin respuesta se ven en Chats */ false && alertaEnt && alertaEnt.alerta_sin_respuesta && esperanNuevas.length>0 &&<div className="alerta-entrega"><b>⏰ Clientas esperando respuesta:</b> {esperanNuevas.join(', ')} <button className="alerta-quitar" onClick={()=>guardarQuitadas({...quitadas, resp:[...new Set([...(quitadas.resp||[]).slice(-200), ...quienEspera(alertaEnt.alerta_sin_respuesta)])]})}>✕ Quitar</button> <span style={{opacity:.8,fontSize:13}}>(revisado a las {new Date(alertaEnt.alerta_sin_respuesta_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}). Ábrelas en Chats.</span></div>}
-      {alertaEnt && alertaEnt.alerta_entrega && quitadas.ent!==alertaEnt.alerta_entrega && <AvisosClientas texto={alertaEnt.alerta_entrega} quitados={quitadas.avisos||[]} onQuitar={cl=>guardarQuitadas({...quitadas, avisos:[...(quitadas.avisos||[]), ...cl].slice(-300)})} onQuitarTodos={cl=>guardarQuitadas({...quitadas, avisos:[...(quitadas.avisos||[]), ...cl].slice(-300)})}/>}{/* avisos-ordenados */}
-      {/* TABS */}
+      {/* TABS (24-nov: sin Live ni Calculadora; Avisos como pestaña; Historial al final) */}
       <div className="tabs">
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
         <button className={`tab ${view==='pedidos'?'on':''}`} onClick={()=>setView('pedidos')}>Pedidos vendidos{pedPend>0 && <span className="tab-n">{pedPend}</span>}</button>
+        <button className={`tab ${view==='avisos'?'on':''}`} onClick={()=>setView('avisos')}>Avisos{nAvisos>0 && <span className="tab-n">{nAvisos}</span>}</button>{/* pestaña-avisos */}
         <button className={`tab ${view==='chats'?'on':''}`} onClick={()=>setView('chats')}>Chats{chatsPend>0 && <span className="tab-n">{chatsPend}</span>}</button>
         <button className={`tab ${view==='citas'?'on':''}`} onClick={()=>setView('citas')}>Citas{citasPend>0 && <span className="tab-n">{citasPend}</span>}</button>
-        <button className={`tab ${view==='historial'?'on':''}`} onClick={()=>setView('historial')}>Historial</button>
-        <button className={`tab ${view==='live'?'on':''}`} onClick={()=>setView('live')}>Live</button>
-        <button className={`tab ${view==='cuentas'?'on':''}`} onClick={()=>setView('cuentas')}>Cuentas del bot</button>{/* cuentas-bot */}
         <a className="tab" href="/etiquetas/" style={{textDecoration:'none'}}>Etiquetas</a> {/* enlace-etiquetas */}
-        <a className="tab" href="/calculadora.html" style={{textDecoration:'none'}}>Calculadora</a> {/* enlace-calculadora */}
+        <button className={`tab ${view==='cuentas'?'on':''}`} onClick={()=>setView('cuentas')}>Cuentas del bot</button>{/* cuentas-bot */}
+        <button className={`tab ${view==='historial'?'on':''}`} onClick={()=>setView('historial')} style={{opacity:.75}}>Historial</button>
       </div>
 
-      {view==='pedidos' ? <PedidosView productos={prods}/> : view==='chats' ? <ChatsView onPend={setChatsPend}/> : view==='citas' ? <CitasView/> : view==='historial' ? <HistorialView productos={prods} filtro={histProd} setFiltro={setHistProd}/> : view==='live' ? <LiveView productos={prods}/> : view==='cuentas' ? <CuentasView/> : <>
+      {view==='pedidos' ? <PedidosView productos={prods}/> : view==='avisos' ? <div className="avisos-pag">
+          {invPend && <div className="aviso-card" style={{borderLeftColor:'#5B7FD6'}}><div className="aviso-top"><span className="aviso-nombre">📦 Revisar inventario</span></div><div className="aviso-motivo">{alertaEnt.alerta_inventario}</div><div className="aviso-btns"><button className="aviso-btn" onClick={()=>guardarQuitadas({...quitadas, inv:alertaEnt.alerta_inventario})}>✓ Listo</button></div></div>}
+          {avisosTexto && <AvisosClientas texto={avisosTexto} completo quitados={quitadas.avisos||[]} onQuitar={cl=>guardarQuitadas({...quitadas, avisos:[...(quitadas.avisos||[]), ...cl].slice(-300)})} onQuitarTodos={cl=>guardarQuitadas({...quitadas, avisos:[...(quitadas.avisos||[]), ...cl].slice(-300)})}/>}
+          {nAvisos===0 && <div className="avisos-vacio">✅ No hay avisos pendientes.<br/><span>Aquí salen las clientas que necesitan a una persona (reclamos, pagos, piden asesora) y lo que haya que revisar del inventario.</span></div>}
+        </div> : view==='chats' ? <ChatsView onPend={setChatsPend}/> : view==='citas' ? <CitasView/> : view==='historial' ? <HistorialView productos={prods} filtro={histProd} setFiltro={setHistProd}/> : view==='cuentas' ? <CuentasView/> : <>
 
       {/* STATS */}
       <div className="stats-bar">
