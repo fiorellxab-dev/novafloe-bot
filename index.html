@@ -488,6 +488,24 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .alerta-entrega{background:var(--red);color:#fff;font-size:16px;line-height:1.4;padding:12px 1.25rem;}
 .alerta-quitar{margin-left:8px;background:rgba(255,255,255,.18);color:#fff;border:1.5px solid rgba(255,255,255,.7);border-radius:999px;padding:3px 12px;font-family:var(--body);font-size:14px;font-weight:700;cursor:pointer;vertical-align:1px;}
 .alerta-quitar:hover{background:rgba(255,255,255,.3);}
+/* avisos-ordenados (24-nov) */
+.avisos-box{background:#FFF6F4;border-bottom:1px solid #F1D5D0;padding:12px 1.25rem 14px;}
+.avisos-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:17px;color:var(--red);}
+.avisos-todos,.avisos-mas{background:none;border:none;color:#6B5B73;font-family:var(--body);font-size:14px;font-weight:700;text-decoration:underline;cursor:pointer;padding:4px 0;}
+.avisos-mas{display:block;margin:8px auto 0;}
+.aviso-card{background:#fff;border:1px solid #EFDCD8;border-left:5px solid #E0A030;border-radius:12px;padding:10px 14px;margin-bottom:8px;}
+.aviso-card.reclamo{border-left-color:var(--red);}
+.aviso-top{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;font-size:15px;}
+.aviso-hora{color:#8A7B90;font-weight:600;}
+.aviso-nombre{font-weight:800;color:#2B1F30;}
+.aviso-tel{color:#6B5B73;user-select:all;}
+.aviso-tag{background:var(--red);color:#fff;border-radius:999px;padding:1px 10px;font-size:12px;font-weight:800;letter-spacing:.3px;}
+.aviso-veces{background:#F3ECF5;color:#6B5B73;border-radius:999px;padding:1px 10px;font-size:12px;font-weight:700;}
+.aviso-motivo{font-size:15px;color:#2B1F30;margin-top:4px;line-height:1.4;}
+.aviso-dijo{font-size:14px;color:#6B5B73;margin-top:3px;font-style:italic;line-height:1.4;}
+.aviso-btns{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.aviso-btn{border:1.5px solid #D9C9DE;background:#fff;color:#2B1F30;border-radius:999px;padding:6px 14px;font-family:var(--body);font-size:14px;font-weight:700;cursor:pointer;}
+.aviso-btn.prim{background:#2B1F30;border-color:#2B1F30;color:#fff;}
 .ch-img{display:block;max-width:100%;width:260px;max-height:340px;object-fit:cover;border-radius:12px;background:#eee;}
 .pk-revisar{background:var(--amber-l);color:#7a5410;border-radius:12px;padding:12px 14px;font-size:18px;line-height:1.35;margin-top:10px;}
 </style>
@@ -1612,6 +1630,66 @@ function numeroReal(c){
 function telBonito(n){ return n ? '+57 '+n.slice(2,5)+' '+n.slice(5,8)+' '+n.slice(8) : null; }
 /* abrir-chat-desde-pedido (23-nov): el boton "Ver su chat" de un pedido cambia a la pestaña Chats con esa conversacion abierta */
 function abrirChatDe(telefono, nombre){ window._nfAbrirChat = {telefono, nombre: nombre||''}; window.dispatchEvent(new Event('nf-abrir-chat')); }
+/* avisos-ordenados (24-nov): el cartel rojo de "Atención" era un solo texto largo. Ahora se parte en tarjetas: una por clienta
+   (la más reciente), con hora, nombre, número, motivo, lo que dijo y botones "Abrir chat" / "Listo". El texto lo sigue escribiendo el puente igual. */
+function partirAvisos(texto){
+  const items = String(texto||'').split(/\s*‖\s*/).map(s=>s.trim()).filter(Boolean);
+  const out = [];
+  for(const it of items){
+    const m = it.match(/^🕐\s*([^—]+?)\s*—\s*([\s\S]*)$/);
+    const hora = m ? m[1].trim() : '';
+    const partes = (m ? m[2] : it).split(/\s+·\s+/).map(s=>s.trim()).filter(Boolean);
+    const a = {hora, titulo:'', nombre:'', tel:'', motivo:'', reclamo:false, dijo:'', otros:[], clave: it.slice(0,160)};
+    partes.forEach((p,i)=>{
+      let x;
+      if((x = p.match(/^Cliente:\s*(.*)$/i))){ const c = x[1]; const t = c.match(/\(([^)]+)\)\s*$/); a.tel = t ? t[1].trim() : ''; a.nombre = c.replace(/\s*\([^)]*\)?\s*$/,'').trim(); }
+      else if((x = p.match(/^Motivo:\s*(.*)$/i))){ let mo = x[1]; if(/^RECLAMA:?\s*/i.test(mo)){ a.reclamo = true; mo = mo.replace(/^RECLAMA:?\s*/i,''); } a.motivo = mo; }
+      else if((x = p.match(/^Dijo:\s*(.*)$/i))) a.dijo = x[1];
+      else if(/^Resp[oó]ndele desde/i.test(p)) {}
+      else if(i===0) a.titulo = p.replace(/^🙋\s*/,'');
+      else a.otros.push(p);
+    });
+    out.push(a);
+  }
+  /* una tarjeta por clienta: se queda la más reciente (vienen de la más nueva a la más vieja) */
+  const vistos = new Set(), res = [];
+  for(const a of out){ const k = a.tel || a.nombre || a.clave; if(vistos.has(k)){ const prev = res.find(r=>(r.tel||r.nombre||r.clave)===k); if(prev){ prev.veces=(prev.veces||1)+1; prev.claves.push(a.clave); } continue; } vistos.add(k); res.push({...a, veces:1, claves:[a.clave]}); }
+  return res;
+}
+function AvisosClientas({texto, quitados, onQuitar, onQuitarTodos}){
+  const [verTodos, setVerTodos] = useState(false);
+  const lista = partirAvisos(texto).filter(a=>!a.claves.some(c=>quitados.includes(c)));
+  if(!lista.length) return null;
+  const mostrar = verTodos ? lista : lista.slice(0,3);
+  const telVisible = t => /^57\d{10}$/.test(t) ? telBonito(t) : (/^\d{8,}$/.test(t) ? '+'+t : '');
+  return (
+    <div className="avisos-box">
+      <div className="avisos-head">
+        <b>🙋 {lista.length===1 ? '1 clienta necesita' : lista.length+' clientas necesitan'} a una persona</b>
+        <button className="avisos-todos" onClick={()=>onQuitarTodos(lista.flatMap(a=>a.claves))}>Ya las atendí todas</button>
+      </div>
+      {mostrar.map(a=>(
+        <div key={a.clave} className={'aviso-card'+(a.reclamo?' reclamo':'')}>
+          <div className="aviso-top">
+            <span className="aviso-hora">{a.hora}</span>
+            <span className="aviso-nombre">{a.nombre || 'Clienta'}</span>
+            {telVisible(a.tel) && <span className="aviso-tel">{telVisible(a.tel)}</span>}
+            {a.reclamo && <span className="aviso-tag">Reclamo</span>}
+            {a.veces>1 && <span className="aviso-veces">{a.veces} avisos</span>}
+          </div>
+          {(a.motivo || a.titulo) && <div className="aviso-motivo">{a.motivo || a.titulo}</div>}
+          {a.dijo && <div className="aviso-dijo">Dijo: «{a.dijo}»</div>}
+          {a.otros.length>0 && <div className="aviso-dijo">{a.otros.join(' · ')}</div>}
+          <div className="aviso-btns">
+            {a.tel && <button className="aviso-btn prim" onClick={()=>abrirChatDe(a.tel, a.nombre)}>💬 Abrir chat</button>}
+            <button className="aviso-btn" onClick={()=>onQuitar(a.claves)}>✓ Listo</button>
+          </div>
+        </div>
+      ))}
+      {lista.length>3 && <button className="avisos-mas" onClick={()=>setVerTodos(v=>!v)}>{verTodos ? 'Ver menos' : 'Ver '+(lista.length-3)+' más'}</button>}
+    </div>
+  );
+}
 function nombreChat(c){ return c.nombre || telBonito(numeroReal(c)) || 'Clienta (número oculto)'; }
 function limpiarPreview(t){
   const s = String(t||'');
@@ -2173,7 +2251,7 @@ function App(){
 
       {alertaEnt && alertaEnt.alerta_inventario && quitadas.inv!==alertaEnt.alerta_inventario && <div className="alerta-entrega"><b>📦 Revisar inventario:</b> {alertaEnt.alerta_inventario} <button className="alerta-quitar" onClick={()=>guardarQuitadas({...quitadas, inv:alertaEnt.alerta_inventario})}>✕ Quitar</button></div>}
       {/* sin-aviso-esperando (12-nov): la usuaria pidió quitar este aviso; las clientas sin respuesta se ven en Chats */ false && alertaEnt && alertaEnt.alerta_sin_respuesta && esperanNuevas.length>0 &&<div className="alerta-entrega"><b>⏰ Clientas esperando respuesta:</b> {esperanNuevas.join(', ')} <button className="alerta-quitar" onClick={()=>guardarQuitadas({...quitadas, resp:[...new Set([...(quitadas.resp||[]).slice(-200), ...quienEspera(alertaEnt.alerta_sin_respuesta)])]})}>✕ Quitar</button> <span style={{opacity:.8,fontSize:13}}>(revisado a las {new Date(alertaEnt.alerta_sin_respuesta_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}). Ábrelas en Chats.</span></div>}
-      {alertaEnt && alertaEnt.alerta_entrega && quitadas.ent!==alertaEnt.alerta_entrega && <div className="alerta-entrega"><b>⚠ Atención:</b> {alertaEnt.alerta_entrega} <button className="alerta-quitar" onClick={()=>guardarQuitadas({...quitadas, ent:alertaEnt.alerta_entrega})}>✕ Quitar</button> <span style={{opacity:.8,fontSize:13}}>(desde las {new Date(alertaEnt.alerta_entrega_at).toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})})</span></div>}
+      {alertaEnt && alertaEnt.alerta_entrega && quitadas.ent!==alertaEnt.alerta_entrega && <AvisosClientas texto={alertaEnt.alerta_entrega} quitados={quitadas.avisos||[]} onQuitar={cl=>guardarQuitadas({...quitadas, avisos:[...(quitadas.avisos||[]), ...cl].slice(-300)})} onQuitarTodos={cl=>guardarQuitadas({...quitadas, avisos:[...(quitadas.avisos||[]), ...cl].slice(-300)})}/>}{/* avisos-ordenados */}
       {/* TABS */}
       <div className="tabs">
         <button className={`tab ${view==='inventario'?'on':''}`} onClick={()=>setView('inventario')}>Inventario</button>
