@@ -1947,14 +1947,14 @@ function CuentasView(){
   const costoResp = medidos.length ? medidos.reduce((s,g)=>s+Number(g.claude_usd),0) / medidos.reduce((s,g)=>s+Number(g.respuestas),0) : 0.0075;
   d.resps.forEach(r=>{ if(porDia[r.fecha]){ porDia[r.fecha].resp = Number(r.respuestas); if(r.fecha < MEDIDO_DESDE){ porDia[r.fecha].claude = Number(r.respuestas)*costoResp; porDia[r.fecha].estimado = true; } } });
   d.gastos.forEach(g=>{ if(porDia[g.fecha] && g.fecha >= MEDIDO_DESDE){ porDia[g.fecha].claude = Number(g.claude_usd); porDia[g.fecha].resp = Number(g.respuestas); porDia[g.fecha].estimado = false; } });
-  d.ventas.forEach(v=>{ if(porDia[v.fecha]){ porDia[v.fecha].ventas = Number(v.ventas||0); porDia[v.fecha].pedidos = Number(v.pedidos||0); } });
+  d.ventas.forEach(v=>{ if(porDia[v.fecha]){ porDia[v.fecha].ventas = Number(v.ventas||0); porDia[v.fecha].pedidos = Number(v.pedidos||0); porDia[v.fecha].jeans = Number(v.unidades||0); } });
   const hayEstimado = dias.some(f=>porDia[f].estimado && porDia[f].claude>0);
   const diasTabla = [...dias].reverse().filter(f=>porDia[f].resp || porDia[f].ventas || f===d.hoy);
   const totalPagado = d.pagos.reduce((s,p)=>s+Number(p.usd||0),0);
   const fijos = d.fijos.map(x=>({...x, usd: dias.filter(f=>f>=x.desde).length * Number(x.usd_mes)/30}));
   const claude = dias.reduce((s,f)=>s+porDia[f].claude,0), resp = dias.reduce((s,f)=>s+porDia[f].resp,0);
   const totalUsd = claude + fijos.reduce((s,x)=>s+x.usd,0);
-  const ventas = dias.reduce((s,f)=>s+porDia[f].ventas,0), nPed = dias.reduce((s,f)=>s+porDia[f].pedidos,0);
+  const ventas = dias.reduce((s,f)=>s+porDia[f].ventas,0), nPed = dias.reduce((s,f)=>s+porDia[f].pedidos,0), nJeans = dias.reduce((s,f)=>s+(porDia[f].jeans||0),0);
   const totalCop = totalUsd * (d.tasa||0);
   const pct = ventas>0 && d.tasa ? totalCop/ventas*100 : null;
   return (
@@ -1964,7 +1964,7 @@ function CuentasView(){
       </div>
       <div className="cu-cards">
         <div className="cu-card"><div className="cu-lbl">Costó el bot</div><div className="cu-num">{usd(totalUsd)}</div>{d.tasa>0 && <div className="cu-sub">≈ {cop(totalCop)} pesos</div>}</div>
-        <div className="cu-card"><div className="cu-lbl">Vendió por el bot</div><div className="cu-num">{cop(ventas)}</div><div className="cu-sub">{nPed.toLocaleString('es-CO')} {nPed===1?'pedido pagado':'pedidos pagados'}{rango==='todo'?' desde el 18 de oct':''}</div></div>
+        <div className="cu-card"><div className="cu-lbl">Vendió por el bot</div><div className="cu-num">{cop(ventas)}</div><div className="cu-sub">{nPed.toLocaleString('es-CO')} {nPed===1?'pedido pagado':'pedidos pagados'} · {nJeans.toLocaleString('es-CO')} jeans{rango==='todo'?' (desde el 18 de oct)':''}</div></div>
         <div className="cu-card verde"><div className="cu-lbl">El bot se lleva</div><div className="cu-num">{pct===null ? '—' : pct.toLocaleString('es-CO',{maximumFractionDigits:1})+'%'}</div><div className="cu-sub">de lo que vende</div></div>
       </div>
       <div className="cu-box">
