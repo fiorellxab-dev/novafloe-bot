@@ -1915,21 +1915,25 @@ function CitaCard({c, onMarcar}){
 /* cuentas-bot (24-nov): cuánto cuesta el bot y cuánto vende. Claude = gasto real por día (lo sube gastos_bot.js desde el servidor
    cada 10 min, desde el 24-nov). Fijos (360dialog, servidor) se reparten por día. Ventas = pedidos pagados del bot (nf_pedidos). */
 function CuentasView(){
-  const [rango, setRango] = useState('mes');
+  /* cuentas-desde-inicio (24-nov): rango "Desde el inicio" (18-oct, primer pedido del bot). Ventas y respuestas salen de las vistas
+     nf_bot_ventas_dia / nf_bot_respuestas_dia (sin tope de 1000 filas). Claude antes del 24-nov = respuestas x costo medido por respuesta (≈). */
+  const INICIO = '2026-10-18', MEDIDO_DESDE = '2026-11-24';
+  const [rango, setRango] = useState('todo');
   const [d, setD] = useState(null);
   const hoyCol = ()=>new Date(Date.now()-5*3600e3).toISOString().slice(0,10);
   const sumarDias = (f,n)=>{ const x = new Date(f+'T12:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); };
   useEffect(()=>{ let vivo = true; (async()=>{
     const hoy = hoyCol();
-    const desde0 = rango==='hoy' ? hoy : rango==='7' ? sumarDias(hoy,-6) : hoy.slice(0,8)+'01'; const desde = desde0 < '2026-11-24' ? '2026-11-24' : desde0; /* las cuentas empiezan cuando se empezó a medir */
-    const [ga, fi, pa, cf, pe] = await Promise.all([
-      sb.from('nf_bot_gastos_dia').select('*').gte('fecha',desde).lte('fecha',hoy).order('fecha',{ascending:false}),
+    const desde0 = rango==='hoy' ? hoy : rango==='7' ? sumarDias(hoy,-6) : rango==='mes' ? hoy.slice(0,8)+'01' : INICIO; const desde = desde0 < INICIO ? INICIO : desde0;
+    const [ga, fi, pa, cf, ve, re] = await Promise.all([
+      sb.from('nf_bot_gastos_dia').select('*').order('fecha',{ascending:false}).limit(1000),
       sb.from('nf_bot_gastos_fijos').select('*').eq('activo',true),
-      sb.from('nf_bot_pagos').select('*').order('fecha',{ascending:false}).limit(50),
+      sb.from('nf_bot_pagos').select('*').order('fecha',{ascending:false}).limit(200),
       sb.from('nf_bot_config').select('*').eq('clave','tasa_cop'),
-      sb.from('nf_pedidos').select('precio_total,estado,created_at').in('estado',['pidiendo_datos_envio','listo_para_enviar','pendiente_confirmacion_humana']).gte('created_at',desde+'T05:00:00Z').limit(5000),
+      sb.from('nf_bot_ventas_dia').select('*').gte('fecha',desde).lte('fecha',hoy).limit(1000),
+      sb.from('nf_bot_respuestas_dia').select('*').gte('fecha',desde).lte('fecha',hoy).limit(1000),
     ]);
-    if(vivo) setD({desde, hoy, gastos:ga.data||[], fijos:fi.data||[], pagos:pa.data||[], tasa:Number((cf.data&&cf.data[0]&&cf.data[0].valor)||0), pedidos:pe.data||[]});
+    if(vivo) setD({desde, hoy, gastos:ga.data||[], fijos:fi.data||[], pagos:pa.data||[], tasa:Number((cf.data&&cf.data[0]&&cf.data[0].valor)||0), ventas:ve.data||[], resps:re.data||[]});
   })().catch(()=>{}); return ()=>{ vivo = false; }; },[rango]);
   const usd = n=>'US$'+Number(n||0).toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2});
   const cop = n=>'$'+Math.round(Number(n||0)).toLocaleString('es-CO');
@@ -1937,9 +1941,16 @@ function CuentasView(){
   if(!d) return <div style={{padding:'2rem 1.25rem',color:'#6B5B73'}}>Cargando cuentas…</div>;
   /* días del rango */
   const dias = []; for(let f=d.desde; f<=d.hoy; f=sumarDias(f,1)) dias.push(f);
-  const porDia = {}; dias.forEach(f=>porDia[f]={claude:0, resp:0, ventas:0, pedidos:0});
-  d.gastos.forEach(g=>{ if(porDia[g.fecha]){ porDia[g.fecha].claude = Number(g.claude_usd); porDia[g.fecha].resp = g.respuestas; } });
-  d.pedidos.forEach(p=>{ const f = new Date(new Date(p.created_at).getTime()-5*3600e3).toISOString().slice(0,10); if(porDia[f]){ porDia[f].ventas += Number(p.precio_total||0); porDia[f].pedidos++; } });
+  const porDia = {}; dias.forEach(f=>porDia[f]={claude:0, resp:0, ventas:0, pedidos:0, estimado:false});
+  /* costo por respuesta medido (lo que de verdad cobra Claude); se usa para calcular los días de antes de medir */
+  const medidos = d.gastos.filter(g=>Number(g.respuestas)>0);
+  const costoResp = medidos.length ? medidos.reduce((s,g)=>s+Number(g.claude_usd),0) / medidos.reduce((s,g)=>s+Number(g.respuestas),0) : 0.0075;
+  d.resps.forEach(r=>{ if(porDia[r.fecha]){ porDia[r.fecha].resp = Number(r.respuestas); if(r.fecha < MEDIDO_DESDE){ porDia[r.fecha].claude = Number(r.respuestas)*costoResp; porDia[r.fecha].estimado = true; } } });
+  d.gastos.forEach(g=>{ if(porDia[g.fecha] && g.fecha >= MEDIDO_DESDE){ porDia[g.fecha].claude = Number(g.claude_usd); porDia[g.fecha].resp = Number(g.respuestas); porDia[g.fecha].estimado = false; } });
+  d.ventas.forEach(v=>{ if(porDia[v.fecha]){ porDia[v.fecha].ventas = Number(v.ventas||0); porDia[v.fecha].pedidos = Number(v.pedidos||0); } });
+  const hayEstimado = dias.some(f=>porDia[f].estimado && porDia[f].claude>0);
+  const diasTabla = [...dias].reverse().filter(f=>porDia[f].resp || porDia[f].ventas || f===d.hoy);
+  const totalPagado = d.pagos.reduce((s,p)=>s+Number(p.usd||0),0);
   const fijos = d.fijos.map(x=>({...x, usd: dias.filter(f=>f>=x.desde).length * Number(x.usd_mes)/30}));
   const claude = dias.reduce((s,f)=>s+porDia[f].claude,0), resp = dias.reduce((s,f)=>s+porDia[f].resp,0);
   const totalUsd = claude + fijos.reduce((s,x)=>s+x.usd,0);
@@ -1949,33 +1960,36 @@ function CuentasView(){
   return (
     <div className="cuentas">
       <div className="cu-rangos">
-        {[['hoy','Hoy'],['7','Últimos 7 días'],['mes','Este mes']].map(([k,t])=><button key={k} className={'cu-rango'+(rango===k?' on':'')} onClick={()=>setRango(k)}>{t}</button>)}
+        {[['todo','Desde el inicio'],['mes','Este mes'],['7','Últimos 7 días'],['hoy','Hoy']].map(([k,t])=><button key={k} className={'cu-rango'+(rango===k?' on':'')} onClick={()=>setRango(k)}>{t}</button>)}
       </div>
       <div className="cu-cards">
         <div className="cu-card"><div className="cu-lbl">Costó el bot</div><div className="cu-num">{usd(totalUsd)}</div>{d.tasa>0 && <div className="cu-sub">≈ {cop(totalCop)} pesos</div>}</div>
-        <div className="cu-card"><div className="cu-lbl">Vendió por el bot</div><div className="cu-num">{cop(ventas)}</div><div className="cu-sub">{nPed} {nPed===1?'pedido pagado':'pedidos pagados'}</div></div>
+        <div className="cu-card"><div className="cu-lbl">Vendió por el bot</div><div className="cu-num">{cop(ventas)}</div><div className="cu-sub">{nPed.toLocaleString('es-CO')} {nPed===1?'pedido pagado':'pedidos pagados'}{rango==='todo'?' desde el 18 de oct':''}</div></div>
         <div className="cu-card verde"><div className="cu-lbl">El bot se lleva</div><div className="cu-num">{pct===null ? '—' : pct.toLocaleString('es-CO',{maximumFractionDigits:1})+'%'}</div><div className="cu-sub">de lo que vende</div></div>
       </div>
       <div className="cu-box">
         <div className="cu-tit">¿En qué se va?</div>
-        <div className="cu-fila"><span>🤖 Claude (escribe las respuestas) · {resp.toLocaleString('es-CO')} respuestas</span><b>{usd(claude)}</b></div>
+        <div className="cu-fila"><span>🤖 Claude (escribe las respuestas) · {resp.toLocaleString('es-CO')} respuestas</span><b>{hayEstimado?'≈ ':''}{usd(claude)}</b></div>
         {fijos.map(x=><div key={x.id} className="cu-fila"><span>{x.id==='servidor'?'🖥️':'💬'} {x.concepto} <small>({usd(x.usd_mes)} al mes, repartido por día)</small></span><b>{usd(x.usd)}</b></div>)}
         <div className="cu-fila"><span>📨 Mensajes de Meta <small>(contestar es gratis; solo cobra si el bot escribe primero)</small></span><b>≈ US$0</b></div>
         <div className="cu-fila total"><span>Total</span><b>{usd(totalUsd)}</b></div>
         {d.tasa>0 && <div className="cu-nota">Dólar a {cop(d.tasa)} (se actualiza solo cada día).</div>}
-        {d.desde==='2026-11-24' && <div className="cu-nota">Las cuentas empiezan el 24 de noviembre, cuando el bot empezó a anotar lo que gasta.</div>}
+        {hayEstimado && <div className="cu-nota">≈ Antes del 24 de noviembre el bot no anotaba lo que gastaba en Claude: esos días se calculan con lo que cuesta cada respuesta hoy ({usd(costoResp*100)} cada 100 respuestas). Desde el 24 es el gasto real.</div>}
+        <div className="cu-nota">360dialog empezó el 22 de noviembre (antes el bot no pagaba WhatsApp) y el servidor el 24. Aquí se cuenta lo que se ha usado; lo que ya se pagó por adelantado sale abajo en "Pagos hechos".</div>
       </div>
       <div className="cu-box">
         <div className="cu-tit">Día por día</div>
         <div className="cu-tabla">
           <div className="cu-tr cu-th"><span>Día</span><span>Respuestas</span><span>Claude</span><span>Ventas</span></div>
-          {[...dias].reverse().map(f=><div key={f} className="cu-tr"><span>{fechaBonita(f)}</span><span>{porDia[f].resp||'—'}</span><span>{porDia[f].claude ? usd(porDia[f].claude) : '—'}</span><span>{porDia[f].ventas ? cop(porDia[f].ventas) : '—'}</span></div>)}
+          {diasTabla.map(f=><div key={f} className="cu-tr"><span>{fechaBonita(f)}</span><span>{porDia[f].resp ? porDia[f].resp.toLocaleString('es-CO') : '—'}</span><span>{porDia[f].claude ? (porDia[f].estimado?'≈ ':'')+usd(porDia[f].claude) : '—'}</span><span>{porDia[f].ventas ? cop(porDia[f].ventas) : '—'}</span></div>)}
+          {diasTabla.length < dias.length && <div className="cu-nota">Solo salen los días en que el bot atendió o vendió.</div>}
         </div>
       </div>
       <div className="cu-box">
         <div className="cu-tit">Pagos hechos (facturas)</div>
         {d.pagos.length===0 ? <div className="cu-nota">No hay pagos anotados.</div> : d.pagos.map(p=><div key={p.id} className="cu-fila"><span>{fechaBonita(p.fecha)} · {p.concepto}{p.nota && <small> — {p.nota}</small>}</span><b>{usd(p.usd)}</b></div>)}
-        <div className="cu-nota">Claude se paga aparte en la cuenta de Anthropic (recarga automática).</div>
+        {d.pagos.length>0 && <div className="cu-fila total"><span>Total pagado en facturas</span><b>{usd(totalPagado)}{d.tasa>0 && <small style={{fontWeight:400}}> ≈ {cop(totalPagado*d.tasa)}</small>}</b></div>}
+        <div className="cu-nota">Claude se paga aparte en la cuenta de Anthropic (recarga automática); si me mandas esas facturas, las agrego aquí.</div>
       </div>
     </div>
   );
