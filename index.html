@@ -1547,7 +1547,7 @@ function PedidosView({productos}){
   const valorCobro = precio => Math.floor(Number(precio) / 2000) * 2000 + 2000;
   /* cobro-solo-hoy (25-nov, la jefa): "Cobrar envíos" cobra SOLO los pedidos de HOY (hora Colombia). El 25-nov el botón les cobró a 6 clientas de ayer que ya se habían despachado. */
   const _desdeHoyCobro = new Date(hoyCO(0)+'T00:00:00-05:00').getTime();
-  const esParaCobroCualquierDia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && !x.skydropx_compra && !(Number(x.envio_valor) > 0) && x.envio_pagado!==true) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||''); };
+  const esParaCobroCualquierDia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && !x.skydropx_compra && !(Number(x.envio_valor) > 0) && x.envio_pagado!==true && !x.envio_cobro_at /* nunca cobrar dos veces (ni a los anulados) */) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||''); };
   const esParaCobro = g => esParaCobroCualquierDia(g) && g.filas.every(x=>new Date(x.created_at).getTime() >= _desdeHoyCobro);
   const resumenItems = g => g.filas.map(f=>{ const p = productos.find(x=>x.id===f.producto_id); return (p ? p.nombre.trim() : 'Jean') + ' talla ' + f.talla + (Number(f.cantidad)>1 ? ' x' + f.cantidad : ''); }).join(', ');
   async function cotizarCobro(){
