@@ -1521,7 +1521,10 @@ function PedidosView({productos}){
      (texto normal si la clienta escribio en las ultimas 24 h; si no, plantilla de Meta 'nf_cobro_envio'). */
   const COBRO_CARO = 15000;
   const valorCobro = precio => Math.floor(Number(precio) / 2000) * 2000 + 2000;
-  const esParaCobro = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && !x.skydropx_compra && !(Number(x.envio_valor) > 0) && x.envio_pagado!==true) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||''); };
+  /* cobro-solo-hoy (25-nov, la jefa): "Cobrar envíos" cobra SOLO los pedidos de HOY (hora Colombia). El 25-nov el botón les cobró a 6 clientas de ayer que ya se habían despachado. */
+  const _desdeHoyCobro = new Date(hoyCO(0)+'T00:00:00-05:00').getTime();
+  const esParaCobroCualquierDia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && !x.skydropx_compra && !(Number(x.envio_valor) > 0) && x.envio_pagado!==true) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||''); };
+  const esParaCobro = g => esParaCobroCualquierDia(g) && g.filas.every(x=>new Date(x.created_at).getTime() >= _desdeHoyCobro);
   const resumenItems = g => g.filas.map(f=>{ const p = productos.find(x=>x.id===f.producto_id); return (p ? p.nombre.trim() : 'Jean') + ' talla ' + f.talla + (Number(f.cantidad)>1 ? ' x' + f.cantidad : ''); }).join(', ');
   async function cotizarCobro(){
     if(cobro.paso==='cotizando' || cobro.paso==='enviando') return;
@@ -1627,7 +1630,7 @@ function PedidosView({productos}){
         </div>); })()}
       {filtro==='hechos' && zona!=='monteria' && (()=>{ const n = empacados.filter(esParaCobro).length; const p = cobro.paso; const btn = {minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}; return (
         <div className="pk-nota" style={{background:'#F1FAF4',borderColor:'#9CCFB0'}}>
-          <div><b>💬 Cobro de envíos:</b> {n>0 ? <>{n} pedido(s) empacado(s) sin cobro de envío.</> : 'No hay pedidos empacados pendientes de cobrar el envío.'}</div>
+          <div><b>💬 Cobro de envíos de HOY:</b> {n>0 ? <>{n} pedido(s) de hoy empacado(s) sin cobro de envío.</> : 'No hay pedidos de hoy empacados pendientes de cobrar el envío.'}</div>{(()=>{ const v = empacados.filter(g=>esParaCobroCualquierDia(g) && !esParaCobro(g)).length; return v>0 ? <div style={{fontSize:14,marginTop:6,color:'var(--night-3)'}}>Solo se cobran los pedidos de hoy. Hay {v} de días anteriores sin cobro de envío en la app: no se incluyen (si alguno sí falta cobrarlo, hazlo tú por WhatsApp).</div> : null; })()}
           {n>0 && !['cotizando','cotizado','enviando'].includes(p) && <button className="pk-btn ok" style={{...btn,marginTop:10}} onClick={cotizarCobro}>💬 Cobrar envíos ({n})</button>}
           {p==='cotizando' && <div style={{marginTop:8}}>Consultando el valor del envío de cada pedido en Skydropx…</div>}
           {p==='cotizado' && cobro.cot && <div style={{marginTop:8,fontSize:15}}>
