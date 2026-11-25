@@ -285,6 +285,7 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .cobro-sub{font-size:13px;color:var(--night-3);margin-top:2px;}
 .cobro-est{font-weight:800;font-size:14px;white-space:nowrap;padding:4px 10px;border-radius:999px;}
 .cobro-est.ok{background:#E8F3EC;color:#2F6B4C;} .cobro-est.no{background:#FFF1DC;color:#A0522D;}
+.cobro-est.anu{background:#EEEAF4;color:#5B4B73;} .cobro-anu{font-size:13px;background:#F4F1F8;color:#5B4B73;border-radius:8px;padding:6px 9px;margin-top:8px;}
 .cobro-det{font-size:14px;margin-top:8px;} .cobro-det .viejo{color:#C0392B;}
 .cobro-items{font-size:13px;color:var(--night-3);margin:4px 0 10px;}
 .cobro-fotos{margin:0 0 10px;} .cobro-fotos-tit{font-size:13px;font-weight:700;margin-bottom:6px;}
@@ -1735,7 +1736,7 @@ function CobrosEnvio({productos}){
   const [fotos, setFotos] = useState({}); /* cobros-comprobante: fotos que mandó cada clienta después del cobro */
   const [grande, setGrande] = useState(null); /* visor-comprobante (25-nov): la foto se ve encima, con X para cerrar, sin abrir otra pestaña */
   useEffect(()=>{ if(!grande) return; const k = e=>{ if(e.key==='Escape') setGrande(null); }; document.addEventListener('keydown', k); return ()=>document.removeEventListener('keydown', k); },[grande]);
-  const cargar = async ()=>{ try{ const {data,error} = await sb.from('nf_pedidos').select('id,grupo_id,created_at,cliente_telefono,cliente_nombre,envio_nombre,envio_ciudad,envio_valor,envio_pagado,envio_cobro_at,producto_id,producto_nombre,talla,cantidad,estado').gte('envio_cobro_at', new Date(Date.now()-14*864e5).toISOString()).order('envio_cobro_at',{ascending:false}).limit(1000); if(!error){ setFilas(data||[]);
+  const cargar = async ()=>{ try{ const {data,error} = await sb.from('nf_pedidos').select('id,grupo_id,created_at,cliente_telefono,cliente_nombre,envio_nombre,envio_ciudad,envio_valor,envio_pagado,envio_cobro_at,producto_id,producto_nombre,talla,cantidad,estado,notas').gte('envio_cobro_at', new Date(Date.now()-14*864e5).toISOString()).order('envio_cobro_at',{ascending:false}).limit(1000); if(!error){ setFilas(data||[]);
       try{ const tels = [...new Set((data||[]).map(f=>f.cliente_telefono).filter(Boolean))]; const desde = (data||[]).reduce((m,f)=>f.envio_cobro_at<m?f.envio_cobro_at:m, new Date().toISOString());
         if(tels.length){ const c = await sb.from('nf_conversaciones').select('telefono,created_at,rol,contenido,foto_publica').in('telefono', tels).gte('created_at', desde).order('created_at',{ascending:true}).limit(3000);
           const por = {}; const msgs = c.data||[];
@@ -1756,18 +1757,19 @@ function CobrosEnvio({productos}){
       <div className="pk-nota">Aquí salen las clientas a las que se les <b>cobró el envío</b> con el botón <b>"Cobrar envíos"</b>. Cuando la clienta manda el comprobante, el bot lo marca <b>✅ Pagó</b> solo y aquí ves la foto (tócala para verla grande; se cierra con la ✕). Las que siguen en <b>⏳ No ha pagado</b> todavía deben el envío.<br/>Para cobrar los envíos de <b>hoy</b>: ve a <b>Ya empacados ayer y hoy</b> y toca <b>💬 Cobrar envíos</b>.</div>
       {dias.length===0 && <div className="pk-falta">No se ha cobrado ningún envío en los últimos 14 días.</div>}
       {dias.map(d=>{ const gs = porDia[d].sort((a,b)=>String(a[0].envio_cobro_at).localeCompare(String(b[0].envio_cobro_at)));
-        const pagaron = gs.filter(g=>g.every(f=>f.envio_pagado===true)); const faltan = gs.filter(g=>!g.every(f=>f.envio_pagado===true));
+        const anulado = g => Number(g[0].envio_valor)===0; /* cobro-anulado (25-nov): envio_valor 0 = cobro anulado (va contra entrega) */ const pagaron = gs.filter(g=>g.every(f=>f.envio_pagado===true)); const anulados = gs.filter(g=>anulado(g) && !g.every(f=>f.envio_pagado===true)); const faltan = gs.filter(g=>!g.every(f=>f.envio_pagado===true) && !anulado(g));
         const debe = faltan.reduce((s,g)=>s+Number(g[0].envio_valor||0),0);
         return <div key={d} className="cobros-dia">
-          <div className="cobros-tit"><b>{fechaTxt(d)}</b> · se les cobró a {gs.length} · <span className="ok">✅ pagaron {pagaron.length}</span> · <span className="no">⏳ faltan {faltan.length}{debe>0?' ('+pesos(debe)+')':''}</span></div>
-          {gs.map(g=>{ const f = g[0]; const pago = g.every(x=>x.envio_pagado===true); const dPed = diaCO(f.created_at);
+          <div className="cobros-tit"><b>{fechaTxt(d)}</b> · se les cobró a {gs.length} · <span className="ok">✅ pagaron {pagaron.length}</span> · <span className="no">⏳ faltan {faltan.length}{debe>0?' ('+pesos(debe)+')':''}</span>{anulados.length>0 && <> · ↩️ anulados {anulados.length}</>}</div>
+          {gs.map(g=>{ const f = g[0]; const pago = g.every(x=>x.envio_pagado===true); const anu = anulado(g) && !pago; const devolver = anu && /^REVISAR:.*devolver/i.test(String(f.notas||'')); const dPed = diaCO(f.created_at);
             return <div key={f.grupo_id||f.id} className={'cobro-card'+(pago?' pago':'')}>
               <div className="cobro-top">
                 <div><div className="cobro-nom">{(f.envio_nombre||f.cliente_nombre||'Sin nombre').trim()}</div>
                   <div className="cobro-sub">{f.envio_ciudad||''}{/^57\d{10}/.test(String(f.cliente_telefono)) ? ' · '+telBonito(String(f.cliente_telefono).replace(/\D/g,'').slice(0,12)) : ''}</div></div>
-                <div className={'cobro-est '+(pago?'ok':'no')}>{pago ? '✅ Pagó' : '⏳ No ha pagado'}</div>
+                <div className={'cobro-est '+(pago?'ok':anu?'anu':'no')}>{pago ? '✅ Pagó' : devolver ? '↩️ Anulado: devolver plata' : anu ? '↩️ Anulado (contra entrega)' : '⏳ No ha pagado'}</div>
               </div>
-              <div className="cobro-det">Envío <b>{pesos(f.envio_valor)}</b> · cobrado a las {hora(f.envio_cobro_at)} · pedido {dPed===d ? 'del mismo día' : <b className="viejo">del {fechaTxt(dPed).toLowerCase()}</b>}</div>
+              {anu && <div className="cobro-anu">{devolver ? 'Se le cobró por error y ya había pagado: hay que devolverle la plata del envío a su Nequi. Su envío va contra entrega.' : 'Se le cobró por error: su pedido ya había salido y va contra entrega. Ya se le pidió disculpas por WhatsApp.'}</div>}
+              <div className="cobro-det">Envío <b>{anu ? 'anulado' : pesos(f.envio_valor)}</b> · cobrado a las {hora(f.envio_cobro_at)} · pedido {dPed===d ? 'del mismo día' : <b className="viejo">del {fechaTxt(dPed).toLowerCase()}</b>}</div>
               <div className="cobro-items">{g.map(nomProd).join(', ')}</div>
               {(()=>{ const fs = (fotos[f.cliente_telefono]||[]).filter(x=>x.at >= f.envio_cobro_at); const comp = fs.filter(x=>x.envio); const ver = comp.length ? comp.slice(-1) : fs.slice(-2);
                 return ver.length>0 && <div className="cobro-fotos">
