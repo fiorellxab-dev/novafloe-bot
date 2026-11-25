@@ -274,6 +274,18 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .tallas-nueva input{flex:1;min-width:0;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--body);outline:none;}
 .tallas-nueva input:focus{border-color:var(--blush-d);}
 .tallas-nueva .btn{white-space:nowrap;}
+/* ajustes-jefa */
+.ajustes{padding:1rem 1.25rem 3rem;max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:12px;}
+.aj-box{background:var(--white);border:1.5px solid var(--border);border-radius:var(--r);padding:1rem 1.1rem;}
+.aj-fila{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.aj-rojo{background:var(--red-l);border-color:var(--red);}
+.aj-tit{font-weight:700;font-size:16px;}
+.aj-ayuda{font-size:13px;color:var(--night-3);margin-top:4px;line-height:1.4;}
+.aj-aviso{font-size:13px;background:#FFF6E0;border:1px solid #F1D9A0;color:#7A5A12;border-radius:10px;padding:8px 10px;margin-bottom:12px;}
+.ajustes .field input,.ajustes textarea{width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:15px;font-family:var(--body);outline:none;background:var(--white);}
+.ajustes textarea{resize:vertical;line-height:1.45;}
+.ajustes .field input:focus,.ajustes textarea:focus{border-color:var(--blush-d);}
+@media (max-width:560px){ .aj-fila{flex-direction:column;align-items:stretch;} .aj-fila .btn{width:100%;} }
 
 /* SECCION TALLAS */
 .section-title{
@@ -2097,6 +2109,106 @@ function CuentasView(){
     </div>
   );
 }
+/* ajustes-jefa (25-nov): todo lo que la jefa puede cambiar sola, sin tocar el bot por dentro.
+   - Pausar el bot / confirmación automática de pagos (nf_bot_estado; antes estaban en la pestaña Live que se quitó)
+   - Datos del negocio (nf_bot_config clave 'negocio') y "Lo que el bot debe saber" (clave 'bot_notas')
+   - Tallas (abre el mismo TallasModal del inventario) */
+const NEGOCIO_DEF = {nequi:'3012582216', titular:'Fiorella Aguirre', asesora:'300 354 7932', horario:'de 10 a 12 y de 3 a 6', direccion:'Cra 19W #15-22, barrio Vallejo, Montería'};
+function AjustesView({prods, onTallas}){
+  const [estado, setEstado] = useState(null);
+  const [neg, setNeg] = useState(null);
+  const [negOrig, setNegOrig] = useState(null);
+  const [notas, setNotas] = useState('');
+  const [notasOrig, setNotasOrig] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [verTallas, setVerTallas] = useState(false);
+  useEffect(()=>{ (async()=>{
+    try{ setEstado(await DB.cargarLive()); }catch(e){ setEstado({}); }
+    try{ const {data} = await sb.from('nf_bot_config').select('clave,valor').in('clave',['negocio','bot_notas']);
+      let n = {...NEGOCIO_DEF}, t = '';
+      (data||[]).forEach(r=>{ if(r.clave==='negocio'){ try{ n = {...n, ...JSON.parse(r.valor)}; }catch(e){} } if(r.clave==='bot_notas') t = r.valor||''; });
+      setNeg(n); setNegOrig(n); setNotas(t); setNotasOrig(t);
+    }catch(e){ setNeg({...NEGOCIO_DEF}); setNegOrig({...NEGOCIO_DEF}); }
+  })(); },[]);
+  async function cambiar(patch){ setGuardando(true); try{ setEstado(await DB.guardarLive(patch)); toast('✓ Guardado'); }catch(e){ toast('Error: '+e.message); } setGuardando(false); }
+  const soloDig = s=>String(s||'').replace(/\D/g,'');
+  async function guardarNegocio(){
+    const n = {nequi:soloDig(neg.nequi), titular:String(neg.titular||'').trim(), asesora:soloDig(neg.asesora), horario:String(neg.horario||'').trim(), direccion:String(neg.direccion||'').trim()};
+    if(n.nequi.length!==10){ toast('El número de Nequi debe tener 10 dígitos'); return; }
+    if(n.asesora.length!==10){ toast('El número de la asesora debe tener 10 dígitos'); return; }
+    if(!n.titular || !n.horario || !n.direccion){ toast('Llena todas las casillas'); return; }
+    n.asesora = n.asesora.replace(/^(\d{3})(\d{3})(\d{4})$/,'$1 $2 $3');
+    if(n.nequi!==soloDig(negOrig.nequi) || n.titular!==negOrig.titular){ if(!confirm('¿Seguro? El bot les va a decir a TODAS las clientas que paguen a:\n\nNequi o llave Bre-B: '+n.nequi+'\nTitular: '+n.titular+'\n\nRevisa que esté perfecto.')) return; }
+    setGuardando(true);
+    try{ const {error} = await sb.from('nf_bot_config').upsert([{clave:'negocio', valor:JSON.stringify(n), actualizado:new Date().toISOString()}],{onConflict:'clave'}); if(error) throw error; setNeg(n); setNegOrig(n); toast('✓ Datos del negocio guardados'); }
+    catch(e){ toast('Error: '+e.message); }
+    setGuardando(false);
+  }
+  async function guardarNotas(){
+    setGuardando(true);
+    try{ const v = String(notas||'').trim().slice(0,1000); const {error} = await sb.from('nf_bot_config').upsert([{clave:'bot_notas', valor:v, actualizado:new Date().toISOString()}],{onConflict:'clave'}); if(error) throw error; setNotas(v); setNotasOrig(v); toast('✓ Guardado'); }
+    catch(e){ toast('Error: '+e.message); }
+    setGuardando(false);
+  }
+  if(!estado || !neg) return <div className="loading-page"><div className="spinner"/></div>;
+  const pausado = !!estado.bot_pausado, auto = !!estado.autoconfirmar;
+  const cambioNeg = JSON.stringify(neg)!==JSON.stringify(negOrig);
+  const campo = (k, label, ph, ayuda, tipo) => (
+    <div className="field" key={k}>
+      <label>{label}</label>
+      <input value={neg[k]||''} inputMode={tipo==='tel'?'numeric':undefined} placeholder={ph} onChange={e=>setNeg(p=>({...p,[k]:e.target.value}))}/>
+      {ayuda && <div className="aj-ayuda">{ayuda}</div>}
+    </div>
+  );
+  return (
+    <div className="ajustes">
+      <div className={'aj-box aj-fila'+(pausado?' aj-rojo':'')}>
+        <div>
+          <div className="aj-tit">{pausado?'Bot de WhatsApp PAUSADO':'Bot de WhatsApp encendido'}</div>
+          <div className="aj-ayuda">{pausado ? 'No les responde a las clientas. Enciéndelo cuando todo esté bien.' : 'Si algo falla o no quieres que venda hoy, páusalo aquí. También puedes escribirle "pausar bot" desde el número de la jefa.'}</div>
+        </div>
+        <button className={`btn btn-lg ${pausado?'btn-primary':'btn-danger-soft'}`} disabled={guardando} onClick={()=>{ if(pausado || confirm('¿Pausar el bot? Dejará de responder a las clientas hasta que lo enciendas.')) cambiar({bot_pausado:!pausado}); }}>{pausado?'Encender':'Pausar'}</button>
+      </div>
+      <div className="aj-box aj-fila">
+        <div>
+          <div className="aj-tit">Confirmar pagos solo: {auto?'SÍ':'NO'}</div>
+          <div className="aj-ayuda">{auto ? 'Si el comprobante cuadra (valor exacto y referencia nueva), el bot da el pago por recibido y pide los datos de envío. Tú lo verificas después.' : 'Cada comprobante te llega a ti y tú lo confirmas.'}</div>
+        </div>
+        <button className={`btn btn-lg ${auto?'btn-danger-soft':'btn-primary'}`} disabled={guardando} onClick={()=>cambiar({autoconfirmar:!auto})}>{auto?'Apagar':'Activar'}</button>
+      </div>
+
+      <div className="aj-box">
+        <div className="aj-tit">Datos del negocio</div>
+        <div className="aj-ayuda" style={{marginBottom:12}}>Lo que el bot les dice a las clientas. Si cambia algo, cámbialo aquí.</div>
+        <div className="aj-aviso">🛠️ Estas casillas se conectan con el bot esta noche (25 de noviembre). Hasta entonces el bot sigue diciendo los datos de siempre.</div>
+        {campo('nequi','Nequi o llave Bre-B para los pagos','3012582216','Las clientas transfieren aquí.','tel')}
+        {campo('titular','Titular de la cuenta','Fiorella Aguirre')}
+        {campo('asesora','WhatsApp de la asesora','300 354 7932','El bot pasa a las clientas a este número cuando necesitan una persona.','tel')}
+        {campo('horario','Horario de atención','de 10 a 12 y de 3 a 6','Escríbelo como lo diría el bot: "de 10 a 12 y de 3 a 6".')}
+        {campo('direccion','Dirección del punto físico','Cra 19W #15-22, barrio Vallejo, Montería')}
+        <button className="btn btn-primary btn-lg" disabled={guardando || !cambioNeg} onClick={guardarNegocio} style={{width:'100%'}}>{cambioNeg?'Guardar datos del negocio':'Sin cambios'}</button>
+      </div>
+
+      <div className="aj-box">
+        <div className="aj-tit">Lo que el bot debe saber</div>
+        <div className="aj-ayuda" style={{marginBottom:10}}>Novedades para que el bot se las diga a las clientas. Escribe frases cortas y claras. Borra lo que ya no aplique.</div>
+        <div className="aj-aviso">🛠️ Se conecta con el bot esta noche.</div>
+        <textarea rows={6} maxLength={1000} value={notas} onChange={e=>setNotas(e.target.value)} placeholder={'Ej:\n- El jean pretina doblada llega el 5 de diciembre.\n- El sábado 30 no abrimos el punto físico.\n- Esta semana: 2 jeans por $140.000.'}/>
+        <div className="aj-ayuda" style={{textAlign:'right'}}>{String(notas||'').length}/1000</div>
+        <button className="btn btn-primary btn-lg" disabled={guardando || notas===notasOrig} onClick={guardarNotas} style={{width:'100%'}}>{notas===notasOrig?'Sin cambios':'Guardar'}</button>
+      </div>
+
+      <div className="aj-box aj-fila">
+        <div>
+          <div className="aj-tit">Tallas</div>
+          <div className="aj-ayuda">Hoy: {TALLAS_JEANS.join(', ')} · {TALLAS_LETRAS.join(', ')}. Agrega tallas nuevas como 16, 18 o XXL.</div>
+        </div>
+        <button className="btn btn-lg btn-ghost" onClick={()=>setVerTallas(true)}>Editar tallas</button>
+      </div>
+      {verTallas && <TallasModal prods={prods} onClose={()=>setVerTallas(false)} onSaved={onTallas}/>}
+    </div>
+  );
+}
 function CitasView({onPend}){
   const [citas, setCitas] = useState(null);
   const [verHist, setVerHist] = useState(false);
@@ -2481,6 +2593,7 @@ function App(){
         <button className={`tab ${view==='citas'?'on':''}`} onClick={()=>setView('citas')}>Citas{citasPend>0 && <span className="tab-n">{citasPend}</span>}</button>
         <a className="tab" href="/etiquetas/" style={{textDecoration:'none'}}>Etiquetas</a> {/* enlace-etiquetas */}
         <button className={`tab ${view==='cuentas'?'on':''}`} onClick={()=>setView('cuentas')}>Cuentas del bot</button>{/* cuentas-bot */}
+        <button className={`tab ${view==='ajustes'?'on':''}`} onClick={()=>setView('ajustes')}>Ajustes</button>{/* ajustes-jefa */}
         <button className={`tab ${view==='historial'?'on':''}`} onClick={()=>setView('historial')} style={{opacity:.75}}>Historial</button>
       </div>
 
@@ -2488,7 +2601,7 @@ function App(){
           {invPend && <div className="aviso-card" style={{borderLeftColor:'#5B7FD6'}}><div className="aviso-top"><span className="aviso-nombre">📦 Revisar inventario</span></div><div className="aviso-motivo">{alertaEnt.alerta_inventario}</div><div className="aviso-btns"><button className="aviso-btn" onClick={()=>guardarQuitadas({...quitadas, inv:alertaEnt.alerta_inventario})}>✓ Listo</button></div></div>}
           {avisosTexto && <AvisosClientas texto={avisosTexto} completo quitados={quitadas.avisos||[]} onQuitar={cl=>guardarQuitadas({...quitadas, avisos:[...(quitadas.avisos||[]), ...cl].slice(-300)})} onQuitarTodos={cl=>guardarQuitadas({...quitadas, avisos:[...(quitadas.avisos||[]), ...cl].slice(-300)})}/>}
           {nAvisos===0 && <div className="avisos-vacio">✅ No hay avisos pendientes.<br/><span>Aquí salen las clientas que necesitan a una persona (reclamos, pagos, piden asesora) y lo que haya que revisar del inventario.</span></div>}
-        </div> : view==='chats' ? <ChatsView onPend={setChatsPend}/> : view==='citas' ? <CitasView/> : view==='historial' ? <HistorialView productos={prods} filtro={histProd} setFiltro={setHistProd}/> : view==='cuentas' ? <CuentasView/> : <>
+        </div> : view==='chats' ? <ChatsView onPend={setChatsPend}/> : view==='citas' ? <CitasView/> : view==='historial' ? <HistorialView productos={prods} filtro={histProd} setFiltro={setHistProd}/> : view==='cuentas' ? <CuentasView/> : view==='ajustes' ? <AjustesView prods={prods} onTallas={()=>setTallasVer(v=>v+1)}/> : <>
 
       {/* STATS */}
       <div className="stats-bar">
