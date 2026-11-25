@@ -287,6 +287,10 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .cobro-est.ok{background:#E8F3EC;color:#2F6B4C;} .cobro-est.no{background:#FFF1DC;color:#A0522D;}
 .cobro-det{font-size:14px;margin-top:8px;} .cobro-det .viejo{color:#C0392B;}
 .cobro-items{font-size:13px;color:var(--night-3);margin:4px 0 10px;}
+.cobro-fotos{margin:0 0 10px;} .cobro-fotos-tit{font-size:13px;font-weight:700;margin-bottom:6px;}
+.cobro-fotos-fila{display:flex;gap:8px;flex-wrap:wrap;}
+.cobro-fotos-fila a{display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:var(--night-3);font-size:12px;}
+.cobro-fotos-fila img{width:96px;height:128px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border);background:var(--mist);}
 /* ajustes-jefa */
 .ajustes{padding:1rem 1.25rem 3rem;max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:12px;}
 .aj-box{background:var(--white);border:1.5px solid var(--border);border-radius:var(--r);padding:1rem 1.1rem;}
@@ -1722,7 +1726,13 @@ function PedidosView({productos}){
    (el bot marca envio_pagado cuando la clienta manda el comprobante). Últimos 14 días, agrupado por día del cobro. */
 function CobrosEnvio({productos}){
   const [filas, setFilas] = useState(null);
-  const cargar = async ()=>{ try{ const {data,error} = await sb.from('nf_pedidos').select('id,grupo_id,created_at,cliente_telefono,cliente_nombre,envio_nombre,envio_ciudad,envio_valor,envio_pagado,envio_cobro_at,producto_id,producto_nombre,talla,cantidad,estado').gte('envio_cobro_at', new Date(Date.now()-14*864e5).toISOString()).order('envio_cobro_at',{ascending:false}).limit(1000); if(!error) setFilas(data||[]); }catch(e){ setFilas(prev=>prev||[]); } };
+  const [fotos, setFotos] = useState({}); /* cobros-comprobante: fotos que mandó cada clienta después del cobro */
+  const cargar = async ()=>{ try{ const {data,error} = await sb.from('nf_pedidos').select('id,grupo_id,created_at,cliente_telefono,cliente_nombre,envio_nombre,envio_ciudad,envio_valor,envio_pagado,envio_cobro_at,producto_id,producto_nombre,talla,cantidad,estado').gte('envio_cobro_at', new Date(Date.now()-14*864e5).toISOString()).order('envio_cobro_at',{ascending:false}).limit(1000); if(!error){ setFilas(data||[]);
+      try{ const tels = [...new Set((data||[]).map(f=>f.cliente_telefono).filter(Boolean))]; const desde = (data||[]).reduce((m,f)=>f.envio_cobro_at<m?f.envio_cobro_at:m, new Date().toISOString());
+        if(tels.length){ const c = await sb.from('nf_conversaciones').select('telefono,created_at,rol,contenido,foto_publica').in('telefono', tels).gte('created_at', desde).order('created_at',{ascending:true}).limit(3000);
+          const por = {}; const msgs = c.data||[];
+          msgs.forEach((m,i)=>{ if(m.rol!=='user' || !m.foto_publica) return; const sig = msgs.slice(i+1).find(x=>x.telefono===m.telefono && x.rol==='assistant'); (por[m.telefono] = por[m.telefono] || []).push({url:m.foto_publica, at:m.created_at, envio: !!(sig && /pago de tu env[ií]o|env[ií]o.{0,40}(pagado|registrado|recib)/i.test(String(sig.contenido||'')))}); });
+          setFotos(por); } }catch(e){} } }catch(e){ setFilas(prev=>prev||[]); } };
   useEffect(()=>{ cargar(); const t = setInterval(()=>{ if(document.visibilityState==='visible') cargar(); }, 30000); return ()=>clearInterval(t); },[]);
   if(!filas) return <div className="loading-page"><div className="spinner"/></div>;
   const diaCO = d => new Date(new Date(d).getTime()-5*3600e3).toISOString().slice(0,10);
@@ -1735,7 +1745,7 @@ function CobrosEnvio({productos}){
   const pesos = n => '$'+Number(n||0).toLocaleString('es-CO');
   return (
     <div className="pedidos-list">
-      <div className="pk-nota">Aquí salen las clientas a las que se les <b>cobró el envío</b> con el botón <b>"Cobrar envíos"</b>. Cuando la clienta manda el comprobante, el bot lo marca <b>✅ Pagó</b> solo. Las que siguen en <b>⏳ No ha pagado</b> todavía deben el envío.</div>
+      <div className="pk-nota">Aquí salen las clientas a las que se les <b>cobró el envío</b> con el botón <b>"Cobrar envíos"</b>. Cuando la clienta manda el comprobante, el bot lo marca <b>✅ Pagó</b> solo y aquí ves la foto (tócala para verla grande). Las que siguen en <b>⏳ No ha pagado</b> todavía deben el envío.<br/>Para cobrar los envíos de <b>hoy</b>: ve a <b>Ya empacados ayer y hoy</b> y toca <b>💬 Cobrar envíos</b>.</div>
       {dias.length===0 && <div className="pk-falta">No se ha cobrado ningún envío en los últimos 14 días.</div>}
       {dias.map(d=>{ const gs = porDia[d].sort((a,b)=>String(a[0].envio_cobro_at).localeCompare(String(b[0].envio_cobro_at)));
         const pagaron = gs.filter(g=>g.every(f=>f.envio_pagado===true)); const faltan = gs.filter(g=>!g.every(f=>f.envio_pagado===true));
@@ -1751,6 +1761,11 @@ function CobrosEnvio({productos}){
               </div>
               <div className="cobro-det">Envío <b>{pesos(f.envio_valor)}</b> · cobrado a las {hora(f.envio_cobro_at)} · pedido {dPed===d ? 'del mismo día' : <b className="viejo">del {fechaTxt(dPed).toLowerCase()}</b>}</div>
               <div className="cobro-items">{g.map(nomProd).join(', ')}</div>
+              {(()=>{ const fs = (fotos[f.cliente_telefono]||[]).filter(x=>x.at >= f.envio_cobro_at); const comp = fs.filter(x=>x.envio); const ver = comp.length ? comp.slice(-1) : fs.slice(-2);
+                return ver.length>0 && <div className="cobro-fotos">
+                  <div className="cobro-fotos-tit">{comp.length ? '🧾 Comprobante del envío' : '📷 Mandó '+(fs.length===1?'una foto':fs.length+' fotos')+' después del cobro (el bot no la tomó como pago: revísala)'}</div>
+                  <div className="cobro-fotos-fila">{ver.map(x=><a key={x.url} href={x.url} target="_blank" rel="noopener"><img src={x.url} alt="comprobante" loading="lazy"/><span>{hora(x.at)}</span></a>)}</div>
+                </div>; })()}
               <button className="aviso-btn" onClick={()=>abrirChatDe(f.cliente_telefono, f.envio_nombre||f.cliente_nombre)}>💬 Ver su chat</button>
             </div>; })}
         </div>; })}
