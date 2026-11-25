@@ -1734,6 +1734,7 @@ function PedidosView({productos}){
 function CobrosEnvio({productos}){
   const [filas, setFilas] = useState(null);
   const [fotos, setFotos] = useState({}); /* cobros-comprobante: fotos que mandó cada clienta después del cobro */
+  const [ver, setVer] = useState('faltan'); /* cobros-filtros (25-nov): Faltan / Pagaron / Anulados / Todos */
   const [grande, setGrande] = useState(null); /* visor-comprobante (25-nov): la foto se ve encima, con X para cerrar, sin abrir otra pestaña */
   useEffect(()=>{ if(!grande) return; const k = e=>{ if(e.key==='Escape') setGrande(null); }; document.addEventListener('keydown', k); return ()=>document.removeEventListener('keydown', k); },[grande]);
   const cargar = async ()=>{ try{ const {data,error} = await sb.from('nf_pedidos').select('id,grupo_id,created_at,cliente_telefono,cliente_nombre,envio_nombre,envio_ciudad,envio_valor,envio_pagado,envio_cobro_at,producto_id,producto_nombre,talla,cantidad,estado,notas').gte('envio_cobro_at', new Date(Date.now()-14*864e5).toISOString()).order('envio_cobro_at',{ascending:false}).limit(1000); if(!error){ setFilas(data||[]);
@@ -1749,19 +1750,24 @@ function CobrosEnvio({productos}){
   const hora = d => new Date(d).toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
   const grupos = {}; filas.filter(f=>f.estado!=='cancelado').forEach(f=>{ const k = f.grupo_id||f.id; (grupos[k] = grupos[k] || []).push(f); });
   const porDia = {}; Object.values(grupos).forEach(g=>{ const d = diaCO(g[0].envio_cobro_at); (porDia[d] = porDia[d] || []).push(g); });
-  const dias = Object.keys(porDia).sort().reverse();
+  const estadoG = g => g.every(f=>f.envio_pagado===true) ? 'pagaron' : Number(g[0].envio_valor)===0 ? 'anulados' : 'faltan';
+  const todosG = Object.values(grupos); const cuenta = k => todosG.filter(g=>estadoG(g)===k).length;
+  const dias = Object.keys(porDia).sort().reverse().filter(d=>ver==='todos' || porDia[d].some(g=>estadoG(g)===ver));
   const nomProd = f => { const p = (productos||[]).find(x=>x.id===f.producto_id); return (p ? p.nombre.trim() : (f.producto_nombre||'Jean')) + ' talla ' + f.talla + (Number(f.cantidad)>1 ? ' x'+f.cantidad : ''); };
   const pesos = n => '$'+Number(n||0).toLocaleString('es-CO');
   return (
     <div className="pedidos-list">
       <div className="pk-nota">Aquí salen las clientas a las que se les <b>cobró el envío</b> con el botón <b>"Cobrar envíos"</b>. Cuando la clienta manda el comprobante, el bot lo marca <b>✅ Pagó</b> solo y aquí ves la foto (tócala para verla grande; se cierra con la ✕). Las que siguen en <b>⏳ No ha pagado</b> todavía deben el envío.<br/>Para cobrar los envíos de <b>hoy</b>: ve a <b>Ya empacados ayer y hoy</b> y toca <b>💬 Cobrar envíos</b>.</div>
-      {dias.length===0 && <div className="pk-falta">No se ha cobrado ningún envío en los últimos 14 días.</div>}
+      <div className="pk-chips" style={{marginBottom:12}}>
+        {[['faltan','⏳ Faltan por pagar'],['pagaron','✅ Pagaron'],['anulados','↩️ Anulados'],['todos','Todos']].map(([k,t])=><button key={k} className={`pk-chip ${ver===k?'on':''}`} onClick={()=>setVer(k)}>{t} ({k==='todos'?todosG.length:cuenta(k)})</button>)}
+      </div>
+      {dias.length===0 && <div className="pk-falta">{todosG.length===0 ? 'No se ha cobrado ningún envío en los últimos 14 días.' : ver==='faltan' ? '🎉 Nadie debe envío: todas pagaron (o el cobro se anuló).' : ver==='pagaron' ? 'Todavía nadie ha pagado el envío.' : 'No hay cobros anulados.'}</div>}
       {dias.map(d=>{ const gs = porDia[d].sort((a,b)=>String(a[0].envio_cobro_at).localeCompare(String(b[0].envio_cobro_at)));
         const anulado = g => Number(g[0].envio_valor)===0; /* cobro-anulado (25-nov): envio_valor 0 = cobro anulado (va contra entrega) */ const pagaron = gs.filter(g=>g.every(f=>f.envio_pagado===true)); const anulados = gs.filter(g=>anulado(g) && !g.every(f=>f.envio_pagado===true)); const faltan = gs.filter(g=>!g.every(f=>f.envio_pagado===true) && !anulado(g));
         const debe = faltan.reduce((s,g)=>s+Number(g[0].envio_valor||0),0);
         return <div key={d} className="cobros-dia">
           <div className="cobros-tit"><b>{fechaTxt(d)}</b> · se les cobró a {gs.length} · <span className="ok">✅ pagaron {pagaron.length}</span> · <span className="no">⏳ faltan {faltan.length}{debe>0?' ('+pesos(debe)+')':''}</span>{anulados.length>0 && <> · ↩️ anulados {anulados.length}</>}</div>
-          {gs.map(g=>{ const f = g[0]; const pago = g.every(x=>x.envio_pagado===true); const anu = anulado(g) && !pago; const devolver = anu && /^REVISAR:.*devolver/i.test(String(f.notas||'')); const dPed = diaCO(f.created_at);
+          {gs.filter(g=>ver==='todos' || estadoG(g)===ver).map(g=>{ const f = g[0]; const pago = g.every(x=>x.envio_pagado===true); const anu = anulado(g) && !pago; const devolver = anu && /^REVISAR:.*devolver/i.test(String(f.notas||'')); const dPed = diaCO(f.created_at);
             return <div key={f.grupo_id||f.id} className={'cobro-card'+(pago?' pago':'')}>
               <div className="cobro-top">
                 <div><div className="cobro-nom">{(f.envio_nombre||f.cliente_nombre||'Sin nombre').trim()}</div>
