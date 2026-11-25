@@ -265,6 +265,15 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 }
 .talla-num:focus{border-color:var(--blush-d);background:white;}
 .talla-num::-webkit-outer-spin-button,.talla-num::-webkit-inner-spin-button{-webkit-appearance:none;}
+/* tallas-editables */
+.tallas-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.talla-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 6px 6px 12px;border-radius:999px;background:var(--mist);border:1.5px solid var(--border);font-weight:700;font-size:14px;color:var(--night);}
+.talla-chip button{width:22px;height:22px;border-radius:50%;border:none;background:white;color:var(--night-3);font-size:15px;line-height:1;cursor:pointer;}
+.talla-chip button:hover{background:#f6dede;color:#b3261e;}
+.tallas-nueva{display:flex;gap:8px;}
+.tallas-nueva input{flex:1;min-width:0;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--body);outline:none;}
+.tallas-nueva input:focus{border-color:var(--blush-d);}
+.tallas-nueva .btn{white-space:nowrap;}
 
 /* SECCION TALLAS */
 .section-title{
@@ -554,8 +563,24 @@ const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
 const PASS = 'novafloe';
 const CATS = ['Jeans','Blusas','Camisetas','Vestidos','Shorts','Conjuntos','Ropa interior','Otros'];
 /* tallas-por-categoria */
-const TALLAS_JEANS = ['4','6','8','10','12','14'];
-const TALLAS_LETRAS = ['XS','S','M','L','XL'];
+/* tallas-editables (25-nov): la jefa agrega o quita tallas desde el botón "Tallas" (se guardan en nf_bot_config:
+   tallas_numericas / tallas_letras). Estas listas son solo el valor por defecto si no hay nada guardado. */
+let TALLAS_JEANS = ['4','6','8','10','12','14'];
+let TALLAS_LETRAS = ['XS','S','M','L','XL'];
+async function cargarTallasConfig(){
+  try{
+    const {data} = await sb.from('nf_bot_config').select('clave,valor').in('clave',['tallas_numericas','tallas_letras']);
+    (data||[]).forEach(r=>{ let l = null; try{ l = JSON.parse(r.valor); }catch(e){}
+      if(Array.isArray(l) && l.length){ l = [...new Set(l.map(x=>String(x).trim()).filter(Boolean))].sort((a,b)=>cmpTalla(a,b));
+        if(r.clave==='tallas_numericas') TALLAS_JEANS = l; else TALLAS_LETRAS = l; } });
+  }catch(e){}
+}
+async function guardarTallasConfig(num, letras){
+  const ahora = new Date().toISOString();
+  const {error} = await sb.from('nf_bot_config').upsert([{clave:'tallas_numericas', valor:JSON.stringify(num), actualizado:ahora},{clave:'tallas_letras', valor:JSON.stringify(letras), actualizado:ahora}],{onConflict:'clave'});
+  if(error) throw error;
+  TALLAS_JEANS = num; TALLAS_LETRAS = letras;
+}
 const CATS_NUMERICAS = ['Jeans','Shorts'];            // el resto (Blusas, Camisetas, Vestidos...) usa XS, S, M, L, XL
 const ORDEN_LETRAS = ['XXS','XS','S','M','L','XL','XXL'];
 const TALLAS_LIST = TALLAS_JEANS;
@@ -575,7 +600,23 @@ const DB = {
     if(error) throw error;
     return data;
   },
+  /* tallas-editables: si la talla es nueva para este jean (ej. 16), primero se crea en 0 sin pisar lo que el bot
+     esté vendiendo en ese momento (solo guarda si el inventario no cambió mientras tanto; si cambió, lo intenta otra vez) */
+  async asegurarTalla(id, talla){
+    for(let i=0;i<4;i++){
+      const {data:p,error:e1} = await sb.from('nf_productos').select('tallas').eq('id',id).single();
+      if(e1) throw e1;
+      const t = p.tallas||{};
+      if(Object.prototype.hasOwnProperty.call(t, talla)) return;
+      const {data,error} = await sb.from('nf_productos').update({tallas:{...t,[talla]:0}}).eq('id',id).eq('tallas',JSON.stringify(t)).select('id');
+      if(error) throw error;
+      if(data && data.length) return;
+    }
+    throw new Error('no se pudo crear la talla '+talla+', intenta otra vez');
+  },
   async moverStock(id,tipo,movs,nota){
+    try{ const {data:p} = await sb.from('nf_productos').select('tallas').eq('id',id).single(); const t = (p&&p.tallas)||{};
+      for(const m of movs){ if(!Object.prototype.hasOwnProperty.call(t, m.talla)) await DB.asegurarTalla(id, m.talla); } }catch(e){ throw e; }
     const {data,error} = await sb.rpc('nf_mover_stock',{p_producto:id,p_tipo:tipo,p_movs:movs,p_nota:nota||''});
     if(error) throw error;
     return data;
@@ -960,6 +1001,68 @@ function ProductCard({prod, onEdit, onDelete, onStock, onHist}){
       </div>
     </div>
   );
+}
+
+/* ── TALLAS QUE MANEJAMOS (tallas-editables, 25-nov) ── */
+function TallasModal({prods, onClose, onSaved}){
+  const [num, setNum] = useState([...TALLAS_JEANS]);
+  const [letras, setLetras] = useState([...TALLAS_LETRAS]);
+  const [nueva, setNueva] = useState({num:'', letras:''});
+  const [saving, setSaving] = useState(false);
+  const unidadesEn = (talla, numerica) => prods.filter(p=>CATS_NUMERICAS.includes(p.categoria)===numerica).reduce((s,p)=>s+(parseInt((p.tallas||{})[talla])||0),0);
+  function agregar(tipo){
+    let v = String(nueva[tipo]||'').trim(); if(tipo==='letras') v = v.toUpperCase();
+    if(!v){ toast('Escribe la talla'); return; }
+    if(v.length>6){ toast('La talla es muy larga'); return; }
+    const lista = tipo==='num' ? num : letras;
+    if(lista.some(x=>x.toUpperCase()===v.toUpperCase())){ toast('Esa talla ya está'); return; }
+    const l = [...lista, v].sort(cmpTalla);
+    tipo==='num' ? setNum(l) : setLetras(l);
+    setNueva(n=>({...n,[tipo]:''}));
+  }
+  function quitar(tipo, t){
+    const u = unidadesEn(t, tipo==='num');
+    if(u>0){ toast('La talla '+t+' todavía tiene '+u+' unidad'+(u===1?'':'es')+'. Primero descuéntalas o cuéntalas en 0.'); return; }
+    tipo==='num' ? setNum(num.filter(x=>x!==t)) : setLetras(letras.filter(x=>x!==t));
+  }
+  async function guardar(){
+    if(!num.length || !letras.length){ toast('Deja al menos una talla en cada grupo'); return; }
+    setSaving(true);
+    try{ await guardarTallasConfig(num, letras); toast('✓ Tallas guardadas'); onSaved(); onClose(); }
+    catch(e){ toast('Error: '+(e.message||'no se pudo guardar')); setSaving(false); }
+  }
+  const grupo = (tipo, titulo, ayuda, lista, ph) => (
+    <div className="field">
+      <div className="section-title">{titulo}</div>
+      <div className="stock-ayuda" style={{marginBottom:8}}>{ayuda}</div>
+      <div className="tallas-chips">
+        {lista.map(t=><span className="talla-chip" key={t}>{t}<button title={'Quitar talla '+t} onClick={()=>quitar(tipo,t)}>×</button></span>)}
+      </div>
+      <div className="tallas-nueva">
+        <input value={nueva[tipo]} placeholder={ph} onChange={e=>setNueva(n=>({...n,[tipo]:e.target.value}))} onKeyDown={e=>{ if(e.key==='Enter') agregar(tipo); }}/>
+        <button className="btn btn-in" onClick={()=>agregar(tipo)}>+ Agregar talla</button>
+      </div>
+    </div>
+  );
+  return <>
+    <div className="drawer-bg" onClick={onClose}/>
+    <div className="drawer">
+      <div className="drawer-head">
+        <h3>Tallas que <em>manejamos</em></h3>
+        <button className="close-btn" onClick={onClose}><Ico.X/></button>
+      </div>
+      <div className="drawer-body">
+        <div className="pk-falta" style={{background:'#F7F3F5',color:'var(--night-2)',marginBottom:14}}>Las tallas que pongas aquí salen al <strong>crear</strong> un producto y en los botones <strong>+ Sumar</strong> y <strong>Contar</strong> de cada tarjeta. El bot vende las tallas que tengan unidades. Para cargar la mercancía nueva, guarda aquí y luego usa <strong>+ Sumar</strong> en el jean.</div>
+        {grupo('num','Jeans y shorts (números)','Ej: 2, 16, 18.', num, 'Ej: 16')}
+        {grupo('letras','Blusas y demás (letras)','Ej: XXL, XS.', letras, 'Ej: XXL')}
+        <div className="stock-ayuda">Si quitas una talla, los jeans que todavía tengan unidades en ella la siguen mostrando. Solo se puede quitar una talla que esté en 0 en todos los productos.</div>
+      </div>
+      <div className="drawer-footer">
+        <button className="btn btn-ghost" onClick={onClose} style={{flex:1}}>Cancelar</button>
+        <button className="btn btn-primary btn-lg" onClick={guardar} disabled={saving} style={{flex:2}}>{saving?'...':'Guardar tallas'}</button>
+      </div>
+    </div>
+  </>;
 }
 
 /* ── MOVER STOCK ── */
@@ -2287,6 +2390,9 @@ function App(){
   const [stockModal, setStockModal] = useState(null);
   const escrituraRef = useRef(0);
   const [histProd, setHistProd] = useState('todos');
+  const [verTallas, setVerTallas] = useState(false); /* tallas-editables */
+  const [, setTallasVer] = useState(0);
+  useEffect(()=>{ if(auth) cargarTallasConfig().then(()=>setTallasVer(v=>v+1)); },[auth]);
 
   useEffect(()=>{ if(auth) cargar(); },[auth]);
   useEffect(()=>{
@@ -2351,6 +2457,11 @@ function App(){
           <button className="btn btn-ghost" title="Actualizar la página" onClick={()=>{ window.location.href = window.location.pathname + '?v=' + Date.now(); }}>
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v5h-5"/></svg><span className="solo-ancho"> Actualizar</span>
           </button>
+          {view==='inventario' && (
+            <button className="btn btn-ghost" title="Agregar o quitar tallas (16, 18, XXL...)" onClick={()=>setVerTallas(true)}>
+              <span style={{fontWeight:800,fontSize:13}}>T</span><span className="solo-ancho"> Tallas</span>
+            </button>
+          )}
           {view==='inventario' && (
             <button className="btn btn-primary" onClick={()=>setEditing({})}>
               <Ico.Plus/> Agregar
@@ -2420,6 +2531,7 @@ function App(){
 
       {/* EDITOR */}
       {editing!==null && <Editor item={editing} onSave={onSave} onClose={()=>setEditing(null)}/>}
+      {verTallas && <TallasModal prods={prods} onClose={()=>setVerTallas(false)} onSaved={()=>setTallasVer(v=>v+1)}/>}
 
       {/* MOVER STOCK */}
       {stockModal && <StockModal prod={stockModal.prod} modo={stockModal.modo} onClose={()=>setStockModal(null)}
