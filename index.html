@@ -274,6 +274,19 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .tallas-nueva input{flex:1;min-width:0;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;font-family:var(--body);outline:none;}
 .tallas-nueva input:focus{border-color:var(--blush-d);}
 .tallas-nueva .btn{white-space:nowrap;}
+/* cobros-envio-lista */
+.cobros-dia{margin-bottom:18px;}
+.cobros-tit{font-size:15px;padding:6px 2px 10px;}
+.cobros-tit .ok{color:#2F6B4C;font-weight:700;} .cobros-tit .no{color:#A0522D;font-weight:700;}
+.cobro-card{background:var(--white);border:1.5px solid #F1D9A0;border-left:5px solid #E0A63C;border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+.cobro-card.pago{border-color:#BFE0CC;border-left-color:#3E9A66;}
+.cobro-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.cobro-nom{font-weight:700;font-size:16px;}
+.cobro-sub{font-size:13px;color:var(--night-3);margin-top:2px;}
+.cobro-est{font-weight:800;font-size:14px;white-space:nowrap;padding:4px 10px;border-radius:999px;}
+.cobro-est.ok{background:#E8F3EC;color:#2F6B4C;} .cobro-est.no{background:#FFF1DC;color:#A0522D;}
+.cobro-det{font-size:14px;margin-top:8px;} .cobro-det .viejo{color:#C0392B;}
+.cobro-items{font-size:13px;color:var(--night-3);margin:4px 0 10px;}
 /* ajustes-jefa */
 .ajustes{padding:1rem 1.25rem 3rem;max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:12px;}
 .aj-box{background:var(--white);border:1.5px solid var(--border);border-radius:var(--r);padding:1rem 1.1rem;}
@@ -1608,6 +1621,7 @@ function PedidosView({productos}){
         {<button className={`pk-chip ${filtro==='mayoreo'?'on':''}`} onClick={()=>setFiltro('mayoreo')} style={{background:'#FFF4D6',color:'#8A5A00',fontWeight:700}}>📦 Mayoreo ({mayoreoG.length})</button>}
         <button className={`pk-chip ${filtro==='esperando'?'on':''}`} onClick={()=>setFiltro('esperando')}>Esperando confirmación ({esperando.length})</button>
         <button className={`pk-chip ${filtro==='hechos'?'on':''}`} onClick={()=>setFiltro('hechos')}>Ya empacados ayer y hoy ({empacados.length})</button>
+        <button className={`pk-chip ${filtro==='cobros'?'on':''}`} onClick={()=>setFiltro('cobros')}>💬 Cobros de envío</button>{/* cobros-envio-lista */}
         <button className={`pk-chip ${filtro==='historial'?'on':''}`} onClick={()=>setFiltro('historial')}>📚 Historial de envíos</button>
         {porRevisar.length>0 && <button className={`pk-chip ${filtro==='revisar'?'on':''}`} onClick={()=>setFiltro('revisar')}>Por revisar ({porRevisar.length})</button>}
         {conAviso.length>0 && <button className={`pk-chip ${filtro==='aviso'?'on':''}`} onClick={()=>setFiltro('aviso')} style={{background:'#FDE8E8',color:'#C0392B',fontWeight:700}}>⏸ Con aviso ({conAviso.length})</button>}
@@ -1689,7 +1703,7 @@ function PedidosView({productos}){
           </div>}
           {p==='error' && <div style={{marginTop:8,color:'#C0392B'}}>⚠️ {guias.error} <button className="pk-btn sec" style={{marginLeft:8,minWidth:0,flex:'none',padding:'8px 12px'}} onClick={()=>setGuias({paso:''})}>Cerrar</button></div>}
         </div>); })()}
-      {filtro==='historial' ? <HistorialEnvios productos={productos} zona={zona}/> :
+      {filtro==='cobros' ? <CobrosEnvio productos={productos}/> : filtro==='historial' ? <HistorialEnvios productos={productos} zona={zona}/> :
       <div className="pedidos-list">
         {cargando
           ? <div className="loading-page"><div className="spinner"/></div>
@@ -1704,6 +1718,45 @@ function PedidosView({productos}){
 
 /* historial-envios (12-nov, pedido de la jefa): TODOS los pedidos empacados desde el inicio, para revisar envíos anteriores
    (dirección, qué llevaba, guía, envío cobrado). Solo lectura. Carga de a 300 desde la base (no solo los 14 días de Pedidos vendidos). */
+/* cobros-envio-lista (25-nov, la jefa): a quién se le cobró el envío con el botón "Cobrar envíos", cuándo, cuánto y si ya pagó
+   (el bot marca envio_pagado cuando la clienta manda el comprobante). Últimos 14 días, agrupado por día del cobro. */
+function CobrosEnvio({productos}){
+  const [filas, setFilas] = useState(null);
+  const cargar = async ()=>{ try{ const {data,error} = await sb.from('nf_pedidos').select('id,grupo_id,created_at,cliente_telefono,cliente_nombre,envio_nombre,envio_ciudad,envio_valor,envio_pagado,envio_cobro_at,producto_id,producto_nombre,talla,cantidad,estado').gte('envio_cobro_at', new Date(Date.now()-14*864e5).toISOString()).order('envio_cobro_at',{ascending:false}).limit(1000); if(!error) setFilas(data||[]); }catch(e){ setFilas(prev=>prev||[]); } };
+  useEffect(()=>{ cargar(); const t = setInterval(()=>{ if(document.visibilityState==='visible') cargar(); }, 30000); return ()=>clearInterval(t); },[]);
+  if(!filas) return <div className="loading-page"><div className="spinner"/></div>;
+  const diaCO = d => new Date(new Date(d).getTime()-5*3600e3).toISOString().slice(0,10);
+  const fechaTxt = f => { const h = hoyCO(0), a = hoyCO(-1); return f===h ? 'Hoy' : f===a ? 'Ayer' : new Date(f+'T12:00:00Z').toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'}); };
+  const hora = d => new Date(d).toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
+  const grupos = {}; filas.filter(f=>f.estado!=='cancelado').forEach(f=>{ const k = f.grupo_id||f.id; (grupos[k] = grupos[k] || []).push(f); });
+  const porDia = {}; Object.values(grupos).forEach(g=>{ const d = diaCO(g[0].envio_cobro_at); (porDia[d] = porDia[d] || []).push(g); });
+  const dias = Object.keys(porDia).sort().reverse();
+  const nomProd = f => { const p = (productos||[]).find(x=>x.id===f.producto_id); return (p ? p.nombre.trim() : (f.producto_nombre||'Jean')) + ' talla ' + f.talla + (Number(f.cantidad)>1 ? ' x'+f.cantidad : ''); };
+  const pesos = n => '$'+Number(n||0).toLocaleString('es-CO');
+  return (
+    <div className="pedidos-list">
+      <div className="pk-nota">Aquí salen las clientas a las que se les <b>cobró el envío</b> con el botón <b>"Cobrar envíos"</b>. Cuando la clienta manda el comprobante, el bot lo marca <b>✅ Pagó</b> solo. Las que siguen en <b>⏳ No ha pagado</b> todavía deben el envío.</div>
+      {dias.length===0 && <div className="pk-falta">No se ha cobrado ningún envío en los últimos 14 días.</div>}
+      {dias.map(d=>{ const gs = porDia[d].sort((a,b)=>String(a[0].envio_cobro_at).localeCompare(String(b[0].envio_cobro_at)));
+        const pagaron = gs.filter(g=>g.every(f=>f.envio_pagado===true)); const faltan = gs.filter(g=>!g.every(f=>f.envio_pagado===true));
+        const debe = faltan.reduce((s,g)=>s+Number(g[0].envio_valor||0),0);
+        return <div key={d} className="cobros-dia">
+          <div className="cobros-tit"><b>{fechaTxt(d)}</b> · se les cobró a {gs.length} · <span className="ok">✅ pagaron {pagaron.length}</span> · <span className="no">⏳ faltan {faltan.length}{debe>0?' ('+pesos(debe)+')':''}</span></div>
+          {gs.map(g=>{ const f = g[0]; const pago = g.every(x=>x.envio_pagado===true); const dPed = diaCO(f.created_at);
+            return <div key={f.grupo_id||f.id} className={'cobro-card'+(pago?' pago':'')}>
+              <div className="cobro-top">
+                <div><div className="cobro-nom">{(f.envio_nombre||f.cliente_nombre||'Sin nombre').trim()}</div>
+                  <div className="cobro-sub">{f.envio_ciudad||''}{/^57\d{10}/.test(String(f.cliente_telefono)) ? ' · '+telBonito(String(f.cliente_telefono).replace(/\D/g,'').slice(0,12)) : ''}</div></div>
+                <div className={'cobro-est '+(pago?'ok':'no')}>{pago ? '✅ Pagó' : '⏳ No ha pagado'}</div>
+              </div>
+              <div className="cobro-det">Envío <b>{pesos(f.envio_valor)}</b> · cobrado a las {hora(f.envio_cobro_at)} · pedido {dPed===d ? 'del mismo día' : <b className="viejo">del {fechaTxt(dPed).toLowerCase()}</b>}</div>
+              <div className="cobro-items">{g.map(nomProd).join(', ')}</div>
+              <button className="aviso-btn" onClick={()=>abrirChatDe(f.cliente_telefono, f.envio_nombre||f.cliente_nombre)}>💬 Ver su chat</button>
+            </div>; })}
+        </div>; })}
+    </div>
+  );
+}
 function HistorialEnvios({productos, zona}){
   const [filas, setFilas] = useState(null);
   const [hayMas, setHayMas] = useState(false);
