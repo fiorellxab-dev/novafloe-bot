@@ -611,6 +611,10 @@ async function cargarTallasConfig(){
         if(r.clave==='tallas_numericas') TALLAS_JEANS = l; else TALLAS_LETRAS = l; } });
   }catch(e){}
 }
+/* envio-margen (25-nov): el cobro del envío = lo que cuesta en Skydropx + ENVIO_MARGEN, redondeado al mil de arriba.
+   La jefa lo cambia en Ajustes (nf_bot_config 'envio_margen'). Antes era el siguiente múltiplo de $2.000 (8.743 -> 10.000). */
+let ENVIO_MARGEN = 3000;
+async function cargarMargenEnvio(){ try{ const {data} = await sb.from('nf_bot_config').select('valor').eq('clave','envio_margen').maybeSingle(); const n = Number(data && data.valor); if(n>=0 && n<=50000) ENVIO_MARGEN = n; }catch(e){} }
 async function guardarTallasConfig(num, letras){
   const ahora = new Date().toISOString();
   const {error} = await sb.from('nf_bot_config').upsert([{clave:'tallas_numericas', valor:JSON.stringify(num), actualizado:ahora},{clave:'tallas_letras', valor:JSON.stringify(letras), actualizado:ahora}],{onConflict:'clave'});
@@ -1539,12 +1543,12 @@ function PedidosView({productos}){
     }catch(e){ setGuias({...(extra||{}), paso:'error', error:'Las guías se compraron, pero no se pudo armar el PDF: '+(e.message||e)+'. Toca "Imprimir guía" en cada pedido en un minuto.'}); }
   }
   /* cobro-envio-app (11-nov, pedido de la usuaria y la jefa): el envio se cobra DESPUES de empacar y revisar todo.
-     La jefa toca "Cobrar envíos": se cotiza en Skydropx (gratis), se cobra el siguiente multiplo de $2.000 por encima del valor real
+     La jefa toca "Cobrar envíos": se cotiza en Skydropx (gratis), se cobra el valor real + ENVIO_MARGEN redondeado al mil (antes: siguiente multiplo de $2.000)
      (8.713 → 10.000; 10.000 → 12.000), los envios de mas de $15.000 reales salen en rojo y SIN marcar. Al confirmar: se guarda
      envio_valor en el pedido (el bot ya sabe recibir el comprobante del envio y marcarlo pagado) y el mensaje sale por nf_salientes
      (texto normal si la clienta escribio en las ultimas 24 h; si no, plantilla de Meta 'nf_cobro_envio'). */
   const COBRO_CARO = 15000;
-  const valorCobro = precio => Math.floor(Number(precio) / 2000) * 2000 + 2000;
+  const valorCobro = precio => Math.ceil((Number(precio) + ENVIO_MARGEN) / 1000) * 1000; /* envio-margen */
   /* cobro-solo-hoy (25-nov, la jefa): "Cobrar envíos" cobra SOLO los pedidos de HOY (hora Colombia). El 25-nov el botón les cobró a 6 clientas de ayer que ya se habían despachado. */
   const _desdeHoyCobro = new Date(hoyCO(0)+'T00:00:00-05:00').getTime();
   const esParaCobroCualquierDia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && !x.skydropx_compra && !(Number(x.envio_valor) > 0) && x.envio_pagado!==true && !x.envio_cobro_at /* nunca cobrar dos veces (ni a los anulados) */) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||''); };
@@ -2215,7 +2219,9 @@ function AjustesView({prods, onTallas}){
   const [notasOrig, setNotasOrig] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [verTallas, setVerTallas] = useState(false);
+  const [margen, setMargen] = useState(String(ENVIO_MARGEN)); const [margenOrig, setMargenOrig] = useState(String(ENVIO_MARGEN)); /* envio-margen */
   useEffect(()=>{ (async()=>{
+    try{ await cargarMargenEnvio(); setMargen(String(ENVIO_MARGEN)); setMargenOrig(String(ENVIO_MARGEN)); }catch(e){}
     try{ setEstado(await DB.cargarLive()); }catch(e){ setEstado({}); }
     try{ const {data} = await sb.from('nf_bot_config').select('clave,valor').in('clave',['negocio','bot_notas']);
       let n = {...NEGOCIO_DEF}, t = '';
@@ -2243,6 +2249,15 @@ function AjustesView({prods, onTallas}){
     catch(e){ toast('Error: '+e.message); }
     setGuardando(false);
   }
+  async function guardarMargen(){
+    const n = Math.round(Number(String(margen).replace(/\D/g,'')));
+    if(!(n>=0 && n<=50000)){ toast('Escribe un valor entre 0 y 50.000'); return; }
+    setGuardando(true);
+    try{ const {error} = await sb.from('nf_bot_config').upsert([{clave:'envio_margen', valor:String(n), actualizado:new Date().toISOString()}],{onConflict:'clave'}); if(error) throw error; ENVIO_MARGEN = n; setMargen(String(n)); setMargenOrig(String(n)); toast('✓ Guardado'); }
+    catch(e){ toast('Error: '+e.message); }
+    setGuardando(false);
+  }
+  const ejCobro = c => Math.ceil((c + (Number(String(margen).replace(/\D/g,''))||0)) / 1000) * 1000;
   if(!estado || !neg) return <div className="loading-page"><div className="spinner"/></div>;
   const pausado = !!estado.bot_pausado, auto = !!estado.autoconfirmar;
   const cambioNeg = JSON.stringify(neg)!==JSON.stringify(negOrig);
@@ -2289,6 +2304,14 @@ function AjustesView({prods, onTallas}){
         <textarea rows={6} maxLength={1000} value={notas} onChange={e=>setNotas(e.target.value)} placeholder={'Ej:\n- El jean pretina doblada llega el 5 de diciembre.\n- El sábado 30 no abrimos el punto físico.\n- Esta semana: 2 jeans por $140.000.'}/>
         <div className="aj-ayuda" style={{textAlign:'right'}}>{String(notas||'').length}/1000</div>
         <button className="btn btn-primary btn-lg" disabled={guardando || notas===notasOrig} onClick={guardarNotas} style={{width:'100%'}}>{notas===notasOrig?'Sin cambios':'Guardar'}</button>
+      </div>
+
+      <div className="aj-box">
+        <div className="aj-tit">Cobro de envíos nacionales</div>
+        <div className="aj-ayuda" style={{marginBottom:10}}>Al tocar <b>Cobrar envíos</b>, a la clienta se le cobra lo que cuesta la guía en Skydropx <b>más esta ganancia</b>, redondeado al mil de arriba. Así cubres si la guía sale un poco más cara al comprarla.</div>
+        <div className="field"><label>Ganancia por envío ($)</label><input inputMode="numeric" value={margen} onChange={e=>setMargen(e.target.value)} placeholder="3000"/></div>
+        <div className="aj-ayuda" style={{marginBottom:10}}>Ejemplo: guía de $8.743 → se cobra <b>${ejCobro(8743).toLocaleString('es-CO')}</b> · guía de $9.410 → se cobra <b>${ejCobro(9410).toLocaleString('es-CO')}</b>.</div>
+        <button className="btn btn-primary btn-lg" disabled={guardando || margen===margenOrig} onClick={guardarMargen} style={{width:'100%'}}>{margen===margenOrig?'Sin cambios':'Guardar'}</button>
       </div>
 
       <div className="aj-box aj-fila">
@@ -2597,7 +2620,7 @@ function App(){
   const [histProd, setHistProd] = useState('todos');
   const [verTallas, setVerTallas] = useState(false); /* tallas-editables */
   const [, setTallasVer] = useState(0);
-  useEffect(()=>{ if(auth) cargarTallasConfig().then(()=>setTallasVer(v=>v+1)); },[auth]);
+  useEffect(()=>{ if(auth) Promise.all([cargarTallasConfig(), cargarMargenEnvio()]).then(()=>setTallasVer(v=>v+1)); },[auth]);
 
   useEffect(()=>{ if(auth) cargar(); },[auth]);
   useEffect(()=>{
