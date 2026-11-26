@@ -1482,6 +1482,47 @@ function PedidosView({productos}){
     if(error){ toast('No se pudo guardar: '+error.message); return; }
     setPedidos(prev=>prev.map(p=>ids.includes(p.id)?{...p,empacado:valor}:p));
     toast(valor?'Listo, pedido empacado':'Pedido devuelto a la lista');
+    if(valor) cobrarAlEmpacar(g); /* cobro-al-empacar-auto */
+  }
+  /* cobro-al-empacar-auto (26-nov, pedido de Chispi): al tocar "Ya empaqué este pedido" se cotiza el envío en Skydropx y, si sale normal
+     (hasta COBRO_CARO), se le manda el cobro a la clienta en ese momento. Si Skydropx no llega o sale caro: NO se cobra y queda en Avisos.
+     Solo envíos nacionales, sin cobro previo, sin aviso, sin guía, que no sean por mayor y desde GUIAS_DESDE. */
+  async function cobrarAlEmpacar(g){
+    try{
+      const fs0 = g.filas; const f = fs0[0]||{};
+      const nacional = f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||'');
+      const unidades = fs0.reduce((t,x)=>t+(Number(x.cantidad)||0),0);
+      if(!nacional || unidades>=6) return;
+      if(fs0.some(x=>x.estado!=='listo_para_enviar' || x.envio_cobro_at || Number(x.envio_valor)>0 || Number(x.envio_valor)===-1 || x.envio_pagado===true || x.nota_jefa || (x.skydropx_compra && x.skydropx_compra!=='error'))) return;
+      if(fs0.some(x=>new Date(x.created_at).getTime() < GUIAS_DESDE)) return;
+      const ids = fs0.map(x=>x.id); const nom = String(f.envio_nombre||'').trim();
+      toast('Revisando cuánto vale el envío de '+nom+'…');
+      const d = await invocar({accion:'cotizar_guias', ids});
+      const r = (d.resultados||[]).find(x=>(x.ids||[]).some(i=>ids.includes(i))) || (d.resultados||[])[0];
+      if(!r || !r.ok || Number(r.precio)>COBRO_CARO){
+        const txt = 'ENVÍO SIN COBRAR: '+(r && r.ok ? 'con '+(d.transportadora||'Coordinadora')+' cuesta $'+Number(r.precio).toLocaleString('es-CO')+' (caro)' : (d.transportadora||'Coordinadora')+' no lo pudo cotizar ('+String((r&&r.error)||'sin respuesta').slice(0,80)+')')+'. No se le cobró. Cotízalo en Skydropx con otra transportadora (Envía o Interrapidísimo suelen salir más baratas), cóbrale ese valor y toca Ya lo resolví.';
+        await sb.from('nf_pedidos').update({nota_jefa: txt}).in('id', ids).is('nota_jefa', null);
+        toast('⚠️ El envío de '+nom+' no se cobró (sale caro o no llega): quedó en Avisos');
+        setPedidos(await DB.cargarPedidos()); return;
+      }
+      const valor = valorCobro(r.precio); const vtxt = valor.toLocaleString('es-CO');
+      const nombre = nom.split(/\s+/)[0] || 'hola'; const items = resumenItems(g); const ciudad = String(f.envio_ciudad||'').trim() || String(r.ciudad||'');
+      const texto = 'Hola '+nombre+' 💕 tu pedido de Nova Floe ya está empacado y listo: '+items+'.\n\nEl envío a '+ciudad+' cuesta *$'+vtxt+'*. Para despacharlo, transfiere a:\n\nNequi o llave Bre-B: 3012582216\nTitular: Fiorella Aguirre\nValor: $'+vtxt+'\n\nY envíame por aquí la foto del comprobante. ¡Gracias!';
+      const ahora = new Date().toISOString();
+      const u = await sb.from('nf_pedidos').update({envio_valor:valor, envio_pagado:false, envio_costo_real:r.precio, envio_cobro_at:ahora}).in('id', ids).is('envio_cobro_at', null).select('id');
+      if(u.error) throw u.error; if(!u.data || !u.data.length) return; /* ya lo cobró otra persona */
+      const ins = await sb.from('nf_salientes').insert({telefono:f.cliente_telefono, texto, autor:'cobro_envio', plantilla:{name:'nf_cobro_envio', lang:'es', params:[nombre, items, ciudad, vtxt]}}).select('id').single();
+      if(ins.error){ await sb.from('nf_pedidos').update({envio_valor:null, envio_costo_real:null, envio_cobro_at:null}).in('id', ids); throw ins.error; }
+      let est = null;
+      for(let i=0;i<25 && !est;i++){ await new Promise(rr=>setTimeout(rr,1500)); const q = await sb.from('nf_salientes').select('estado,error').eq('id', ins.data.id).single(); if(q.data && (q.data.estado==='enviado' || q.data.estado==='error')) est = q.data; }
+      if(est && est.estado==='enviado'){ toast('💬 Cobro de envío enviado a '+nom+': $'+vtxt); }
+      else {
+        if(!est){ const c = await sb.from('nf_salientes').update({estado:'error', error:'cancelado: el bot no respondió a tiempo'}).eq('id', ins.data.id).eq('estado','pendiente').select('id'); if(!(c.data && c.data.length)){ toast('El cobro de '+nom+' se está enviando; revísalo en un minuto en su tarjeta'); setPedidos(await DB.cargarPedidos()); return; } }
+        await sb.from('nf_pedidos').update({envio_valor:null, envio_costo_real:null, envio_cobro_at:null}).in('id', ids);
+        toast('⚠️ No se pudo enviar el cobro a '+nom+': quedó sin cobrar (usa "Cobrar envíos")');
+      }
+      setPedidos(await DB.cargarPedidos());
+    }catch(e){ toast('No se pudo cobrar el envío ahora: '+(e.message||e)+'. Usa "Cobrar envíos".'); }
   }
 
   async function quitarAviso(g){
