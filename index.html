@@ -1889,11 +1889,18 @@ function CobrosEnvio({productos}){
     </div>
   );
 }
+/* historial-imprimir (26-nov): volver a imprimir la guía de cualquier envío del historial (ya pagada: no compra nada) */
+async function imprimirGuiaDe(ids, nombre){
+  toast('Preparando la guía de '+(nombre||'la clienta')+'…');
+  try{ const {data, error} = await sb.functions.invoke('skydropx', {body:{accion:'pdf_guias', ids}}); if(error) throw error; if(!data || !data.ok || !data.pdf) throw new Error((data && (data.error || (data.fallas||[]).join('; '))) || 'sin PDF'); imprimirPdf(pdfDesdeB64(data.pdf)); }
+  catch(e){ toast('No se pudo traer la guía: '+(e.message||e)); }
+}
 function HistorialEnvios({productos, zona}){
   const [filas, setFilas] = useState(null);
   const [hayMas, setHayMas] = useState(false);
   const [busca, setBusca] = useState('');
   const [cargandoMas, setCargandoMas] = useState(false);
+  const [soloGuia, setSoloGuia] = useState(false); /* historial-imprimir */
   const POR = 300;
   async function cargar(desde){
     const {data, error} = await sb.from('nf_pedidos').select('*').eq('empacado', true).not('cliente_telefono','like','573990000%').order('created_at',{ascending:false}).range(desde, desde+POR-1);
@@ -1909,13 +1916,14 @@ function HistorialEnvios({productos, zona}){
   const q = norm(busca.trim()); const qd = busca.replace(/\D/g,'');
   const nomProd = (id, guardado) => { const p = productos.find(x=>x.id===id); return p ? p.nombre.trim() : (guardado ? guardado+' (ya no está en el inventario)' : 'Producto (ya no está en el inventario)'); };
   const coincide = p => !q || [p.envio_nombre, p.cliente_nombre, p.envio_ciudad, p.envio_direccion, p.skydropx_guia, nomProd(p.producto_id, p.producto_nombre)].some(v=>norm(v).includes(q)) || (qd.length>=4 && [p.envio_telefono, p.envio_cedula, p.cliente_telefono].some(v=>String(v||'').replace(/\D/g,'').includes(qd)));
-  const grupos = agruparPedidos(filas.filter(p=>enZona(p) && coincide(p))).sort((a,b)=>new Date(b.base.created_at)-new Date(a.base.created_at));
+  const grupos = agruparPedidos(filas.filter(p=>enZona(p) && coincide(p) && (!soloGuia || p.skydropx_compra==='ok'))).sort((a,b)=>new Date(b.base.created_at)-new Date(a.base.created_at));
   const diaDe = iso => { const s = new Date(iso).toLocaleDateString('es-CO',{timeZone:'America/Bogota', weekday:'long', day:'numeric', month:'long', year:'numeric'}); return s.charAt(0).toUpperCase()+s.slice(1); };
   let diaPrev = '';
   return (
     <div className="pedidos-list">
       <div className="pk-nota" style={{background:'#F7F3F5'}}>📚 <b>Historial de envíos:</b> todos los pedidos empacados desde el inicio (solo para consultar). Busca por nombre, teléfono, cédula, ciudad, dirección, jean o número de guía.</div>
       <input className="ch-buscar" type="search" value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar: nombre, teléfono, cédula, ciudad, guía…"/>
+      <div className="pk-chips" style={{marginBottom:4}}><button className={`pk-chip ${soloGuia?'on':''}`} onClick={()=>setSoloGuia(!soloGuia)}>🧾 Solo los que tienen guía (para volver a imprimir)</button></div>
       <div style={{fontSize:15,color:'var(--night-2)'}}><b>{grupos.length} envío(s)</b>{busca.trim() ? ' encontrados' : ''} · {zona==='afuera' ? 'solo 🚚 Envío nacional' : zona==='monteria' ? 'solo 🏠 Montería' : 'todos (nacional y Montería)'}{zona!=='todos' ? <span style={{color:'var(--night-3)'}}> — para ver todos toca "Todos" arriba</span> : null}{hayMas ? ' · hay más antiguos abajo' : ''}</div>
       {grupos.length===0 && <div className="empty"><p style={{fontSize:18}}>No hay envíos que coincidan.</p></div>}
       {grupos.map(g=>{
@@ -1940,6 +1948,7 @@ function HistorialEnvios({productos, zona}){
               {b.envio_email && <div className="f"><span>Correo</span><span>{b.envio_email}</span></div>}
             </div>}
             {conGuia && <div className="pk-falta" style={{marginTop:10,background:'#E8F3EC',color:'#2F6B4C'}}>🧾 Guía {conGuia.skydropx_transportadora ? conGuia.skydropx_transportadora.charAt(0).toUpperCase()+conGuia.skydropx_transportadora.slice(1) : ''} N.º <b>{conGuia.skydropx_guia}</b>{conGuia.skydropx_costo ? ' · costó $'+Number(conGuia.skydropx_costo).toLocaleString('es-CO') : ''}</div>}
+            {g.filas.some(f=>f.skydropx_compra==='ok') && <div className="pk-acciones"><button className="pk-btn sec" onClick={()=>imprimirGuiaDe(g.filas.map(f=>f.id), b.envio_nombre)}>🖨️ Volver a imprimir la guía</button></div>}
             {env && <div className="pk-falta" style={{marginTop:10,background:'#F1EEF6',color:'#5B4B73'}}>💬 Envío cobrado: ${Number(env.envio_valor).toLocaleString('es-CO')} · {env.envio_pagado ? 'pagado ✓' : 'sin pagar'}</div>}
             {g.filas.some(f=>f.skydropx_compra==='contraentrega') && <div className="pk-falta" style={{marginTop:10,background:'#F1EEF6',color:'#5B4B73'}}>📦 Fue contra entrega</div>}
             {g.filas.some(f=>f.nota_jefa) && <div className="pk-falta" style={{marginTop:10}}>⏸ Aviso: {(g.filas.find(f=>f.nota_jefa)||{}).nota_jefa}</div>}
