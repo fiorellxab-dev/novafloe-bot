@@ -2386,7 +2386,6 @@ function AjustesView({prods, onTallas}){
       <div className="aj-box">
         <div className="aj-tit">Datos del negocio</div>
         <div className="aj-ayuda" style={{marginBottom:12}}>Lo que el bot les dice a las clientas. Si cambia algo, cámbialo aquí.</div>
-        <div className="aj-aviso">🛠️ Estas casillas se conectan con el bot esta noche (25 de noviembre). Hasta entonces el bot sigue diciendo los datos de siempre.</div>
         {campo('nequi','Nequi o llave Bre-B para los pagos','3012582216','Las clientas transfieren aquí.','tel')}
         {campo('titular','Titular de la cuenta','Fiorella Aguirre')}
         {campo('asesora','WhatsApp de la asesora','300 354 7932','El bot pasa a las clientas a este número cuando necesitan una persona.','tel')}
@@ -2398,7 +2397,6 @@ function AjustesView({prods, onTallas}){
       <div className="aj-box">
         <div className="aj-tit">Lo que el bot debe saber</div>
         <div className="aj-ayuda" style={{marginBottom:10}}>Novedades para que el bot se las diga a las clientas. Escribe frases cortas y claras. Borra lo que ya no aplique.</div>
-        <div className="aj-aviso">🛠️ Se conecta con el bot esta noche.</div>
         <textarea rows={6} maxLength={1000} value={notas} onChange={e=>setNotas(e.target.value)} placeholder={'Ej:\n- El jean pretina doblada llega el 5 de diciembre.\n- El sábado 30 no abrimos el punto físico.\n- Esta semana: 2 jeans por $140.000.'}/>
         <div className="aj-ayuda" style={{textAlign:'right'}}>{String(notas||'').length}/1000</div>
         <button className="btn btn-primary btn-lg" disabled={guardando || notas===notasOrig} onClick={guardarNotas} style={{width:'100%'}}>{notas===notasOrig?'Sin cambios':'Guardar'}</button>
