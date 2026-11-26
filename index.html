@@ -1508,6 +1508,7 @@ function PedidosView({productos}){
   /* skydropx (10-nov): subir los pedidos de afuera de Monteria como ORDENES (sin comprar guia). La jefa luego compra/imprime en Skydropx. */
   /* 10-nov: SOLO los YA EMPACADOS se suben (la jefa empaca primero, luego sube y saca la guia) */
   const SKY_DESDE = Date.parse('2026-11-10T00:00:00-05:00'); /* los de antes ya se despacharon sin Skydropx */
+  const GUIAS_DESDE = Date.parse('2026-11-25T00:00:00-05:00'); /* guias-solo-nuevas (26-nov): los pagados antes del 25-nov se enviaron por fuera de la app; no se les compra guía ni se quedan en Ya empacados */
   const esParaSky = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && !x.skydropx_order_id) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||'') && !g.filas.some(envioDeuda); };
   async function subirSky(g){
     if(subiendoSky) return;
@@ -1533,7 +1534,7 @@ function PedidosView({productos}){
   const cuentaZona = z => agruparPedidos(pedidos.filter(p=>p.estado==='listo_para_enviar' && !p.empacado && enZona(p,z) && !(z!=='todos' && sinZona(p)))).length;
   /* guias-jadens (10-nov): "Comprar e imprimir guias" = cotizar (gratis) → la jefa confirma el total → comprar de a 4 → un PDF 10x15 → imprimir.
      La compra solo funciona si nf_bot_estado.skydropx_compra_activa = true (lo revisa tambien el servidor). Nunca compra dos veces (candado en el servidor). */
-  const esParaGuia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && (!x.skydropx_compra || x.skydropx_compra==='error')) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||'') && !g.filas.some(envioDeuda) && g.filas.some(x=>Number(x.envio_valor)>0 && x.envio_pagado===true); /* guia-solo-con-envio-pagado */ };
+  const esParaGuia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= GUIAS_DESDE && (!x.skydropx_compra || x.skydropx_compra==='error')) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||'') && !g.filas.some(envioDeuda) && g.filas.some(x=>Number(x.envio_valor)>0 && x.envio_pagado===true); /* guia-solo-con-envio-pagado */ };
   const invocar = async body => { const {data, error} = await sb.functions.invoke('skydropx', {body}); if(error){ let m = error.message; try{ const j = await error.context.json(); if(j && j.error) m = j.error; }catch(e){} throw new Error(m); } return data; };
   async function cotizarGuias(){
     if(guias.paso==='cotizando' || guias.paso==='comprando') return;
@@ -1651,7 +1652,7 @@ function PedidosView({productos}){
   /* empacados-ayer-y-hoy (10-nov): en "Ya empacados" solo se ven los de ayer y hoy (hora Colombia). Los demas siguen guardados en la base. */
   const _desdeAyer = new Date(hoyCO(-1)+'T00:00:00-05:00').getTime();
   /* tambien se quedan los que ya pagaron el envio y aun no tienen guia, aunque sean de dias anteriores (cobro-envio-app) */
-  const empacados = listos.filter(g=>g.filas.every(f=>f.empacado) && (g.filas.some(envioDeuda) || /* pedidos-simples: los que deben el envío no se pierden */ g.filas.some(f=>new Date(f.created_at).getTime() >= _desdeAyer) || g.filas.some(f=>Number(f.envio_valor)>0 && f.envio_pagado===true && f.skydropx_compra!=='ok')));
+  const empacados = listos.filter(g=>g.filas.every(f=>f.empacado) && (g.filas.some(envioDeuda) || /* pedidos-simples: los que deben el envío no se pierden */ g.filas.some(f=>new Date(f.created_at).getTime() >= _desdeAyer) || g.filas.some(f=>Number(f.envio_valor)>0 && f.envio_pagado===true && f.skydropx_compra!=='ok' && new Date(f.created_at).getTime() >= GUIAS_DESDE)));
   const esperando = agruparPedidos(pz.filter(p=>p.estado==='pendiente_confirmacion_humana'));
   const lista = filtro==='mayoreo' ? mayoreoG : filtro==='listo' ? porEmpacar : filtro==='datos' ? faltanDatos : empacados;
   listaRef.current = lista; const clvFotos = filtro + '|' + lista.map(g=>g.filas.map(f=>f.id+(f.envio_pagado?'p':'')+(f.envio_cobro_at?'c':'')).join('.')).join(',');
