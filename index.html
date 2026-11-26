@@ -1687,7 +1687,7 @@ function PedidosView({productos}){
       const texto = 'Hola '+nombre+' 💕 tu pedido de Nova Floe ya está empacado y listo: '+items+'.\n\nEl envío a '+ciudad+' cuesta *$'+vtxt+'*. Para despacharlo, transfiere a:\n\nNequi o llave Bre-B: 3012582216\nTitular: Fiorella Aguirre\nValor: $'+vtxt+'\n\nY envíame por aquí la foto del comprobante. ¡Gracias!';
       try{
         const ahora = new Date().toISOString();
-        const u = await sb.from('nf_pedidos').update({envio_valor:valor, envio_pagado:false, envio_costo_real:r.precio, envio_cobro_at:ahora}).in('id', r.ids); if(u.error) throw u.error;
+        const u = await sb.from('nf_pedidos').update({envio_valor:valor, envio_pagado:false, envio_costo_real:r.precio, envio_cobro_at:ahora}).in('id', r.ids).is('envio_cobro_at', null).select('id'); if(u.error) throw u.error; if(!u.data || !u.data.length){ res.push({nombre:r.nombre, ok:false, error:'ya se le había cobrado el envío (no se le volvió a cobrar)'}); continue; } /* sin-doble-cobro */
         const ins = await sb.from('nf_salientes').insert({telefono:f.cliente_telefono, texto, autor:'cobro_envio', plantilla:{name:'nf_cobro_envio', lang:'es', params:[nombre, items, ciudad, vtxt]}}).select('id').single();
         if(ins.error){ await sb.from('nf_pedidos').update({envio_valor:null, envio_costo_real:null, envio_cobro_at:null}).in('id', r.ids); throw ins.error; }
         salientes.push({id:ins.data.id, nombre:r.nombre, valor, ids:r.ids});
