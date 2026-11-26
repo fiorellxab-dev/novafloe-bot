@@ -2423,6 +2423,10 @@ function AjustesView({prods, onTallas}){
     </div>
   );
 }
+/* citas-solo-proximas (25-nov): minutos del día (hora Colombia) en que termina la cita, leídos de c.hora ("4:00 p. m.", "10 a 12 m."); null si no se entiende */
+function minutosCita(h){ const t = String(h||'').toLowerCase(); const ns = [...t.matchAll(/(\d{1,2})(?::(\d{2}))?/g)]; if(!ns.length) return null; const u = ns[ns.length-1]; let hh = Number(u[1]), mm = Number(u[2]||0); if(hh>23) return null;
+  if(/p\.?\s*m/.test(t) && hh<12) hh += 12; return hh*60+mm; }
+function citaYaPaso(c){ const m = minutosCita(c.hora); if(m===null) return false; const ahora = new Date(Date.now()-5*3600e3); return ahora.getUTCHours()*60+ahora.getUTCMinutes() > m+60; }
 function CitasView({onPend}){
   const [citas, setCitas] = useState(null);
   const [verHist, setVerHist] = useState(false);
@@ -2433,11 +2437,11 @@ function CitasView({onPend}){
   const pend = citas.filter(c=>c.estado==='pendiente');
   const hoy = hoyCO(0), man = hoyCO(1);
   const grupos = [
-    ['Ya pasaron (márcalas)', pend.filter(c=>c.fecha && c.fecha<hoy)],
-    ['Hoy', pend.filter(c=>c.fecha===hoy)],
+    /* citas-solo-proximas (25-nov): las de días pasados ya no se muestran */
+    ['Hoy', pend.filter(c=>c.fecha===hoy && !citaYaPaso(c))], /* citas-solo-proximas: las de hoy cuya hora ya pasó (más 1 hora) tampoco salen */
     ['Mañana', pend.filter(c=>c.fecha===man)],
     ['Próximas', pend.filter(c=>c.fecha && c.fecha>man)],
-    ['Día por confirmar', pend.filter(c=>!c.fecha)]
+    ['Día por confirmar', pend.filter(c=>!c.fecha && Date.now()-new Date(c.created_at).getTime() < 7*864e5)]
   ].filter(g=>g[1].length);
   const hist = citas.filter(c=>c.estado!=='pendiente').sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)));
   return (
@@ -2445,8 +2449,6 @@ function CitasView({onPend}){
       <div className="pk-falta" style={{background:'#F7F3F5',color:'var(--night-2)'}}>Aquí salen las citas que agenda el bot: quién viene, qué día, a qué hora y su número. Punto físico: Cra 19W #15-22, Vallejo · 10 a 12 y 3 a 6.</div>
       {!grupos.length && <div className="pk-falta">No hay citas pendientes.</div>}
       {grupos.map(([t, l])=> <React.Fragment key={t}><div className="pk-envio" style={{background:'transparent',padding:'6px 2px 0'}}><div className="t">{t} ({l.length})</div></div>{l.map(c=> <CitaCard key={c.id} c={c} onMarcar={marcar}/>)}</React.Fragment>)}
-      {hist.length>0 && <button className="pk-btn sec" style={{flex:'none'}} onClick={()=>setVerHist(!verHist)}>{verHist?'Ocultar':'Ver'} citas anteriores ({hist.length})</button>}
-      {verHist && hist.slice(0,60).map(c=> <CitaCard key={c.id} c={c} onMarcar={marcar}/>)}
     </div>
   );
 }
@@ -2691,7 +2693,7 @@ function App(){
   const [chatsPend, setChatsPend] = useState(0);
   const [pedPend, setPedPend] = useState(0); /* aviso-pedidos */ const [pedAvisos, setPedAvisos] = useState(0); /* pedidos-simples */
   const [citasPend, setCitasPend] = useState(0); /* citas */
-  useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_citas').select('fecha').eq('estado','pendiente').lte('fecha', hoyCO(1)); if(vivo) setCitasPend((data||[]).length); }catch(e){} }; f(); const t = setInterval(f, 60000); return ()=>{ vivo = false; clearInterval(t); }; },[]);
+  useEffect(()=>{ let vivo = true; const f = async ()=>{ if(document.visibilityState!=='visible') return; try{ const {data} = await sb.from('nf_citas').select('fecha,hora').eq('estado','pendiente').gte('fecha', hoyCO(0)).lte('fecha', hoyCO(1)); /* citas-solo-proximas */ if(vivo) setCitasPend((data||[]).filter(c=>!(c.fecha===hoyCO(0) && citaYaPaso(c))).length); }catch(e){} }; f(); const t = setInterval(f, 60000); return ()=>{ vivo = false; clearInterval(t); }; },[]);
   const [alertaEnt, setAlertaEnt] = useState(null); /* alerta-entrega */
   /* quitar-alertas (12-nov): cada aviso rojo se puede quitar. Clientas esperando: se ocultan las que ya se quitaron; si aparece una NUEVA, el aviso vuelve solo con ella. Inventario/atención: se ocultan hasta que el texto cambie. Se recuerda en este dispositivo. */
   const [quitadas, setQuitadas] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('nf_alertas_quitadas')||'{}'); }catch(e){ return {}; } });
@@ -2809,7 +2811,7 @@ function App(){
         <a className="tab" href="/etiquetas/" style={{textDecoration:'none'}}>Etiquetas</a> {/* enlace-etiquetas */}
         <button className={`tab ${view==='cuentas'?'on':''}`} onClick={()=>setView('cuentas')}>Cuentas del bot</button>{/* cuentas-bot */}
         <button className={`tab ${view==='ajustes'?'on':''}`} onClick={()=>setView('ajustes')}>Ajustes</button>{/* ajustes-jefa */}
-        <button className={`tab ${view==='historial'?'on':''}`} onClick={()=>setView('historial')} style={{opacity:.75}}>Historial</button>
+        {/* sin-tab-historial (25-nov): se quitó la pestaña; el historial de un producto se abre desde su tarjeta */}
       </div>
 
       {view==='pedidos' ? <PedidosView productos={prods}/> : view==='avisos' ? <div className="avisos-pag">
