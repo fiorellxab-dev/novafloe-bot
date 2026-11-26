@@ -828,6 +828,26 @@ function Editor({item, onSave, onClose}){
   function cambiarCategoria(c){ const lista = tallasDeCategoria(c); setF(p=>({...p, categoria:c, linea: isNew ? (c==='Jeans' ? 'premium' : 'ninguna') : p.linea, tallas: isNew ? Object.fromEntries(Object.entries(p.tallas||{}).filter(([k])=>lista.includes(k))) : p.tallas})); }
   const listaTallas = [...new Set([...tallasDeCategoria(f.categoria), ...Object.keys(f.tallas||{})])].sort(cmpTalla);
   function setT(t,v){ setF(p=>({...p,tallas:{...p.tallas,[t]:parseInt(v)||0}})); }
+  /* talla-en-editor (26-nov): agregar una talla nueva (ej. 2, 16, XXL) desde aquí; queda en la lista de tallas para todos los productos
+     de esa clase (igual que el botón "Tallas") y, si el producto ya existe, se crea en 0 (las unidades se suman con "Llegó") */
+  const [nuevaT, setNuevaT] = useState(''); const [agregandoT, setAgregandoT] = useState(false);
+  async function agregarTalla(){
+    const t = nuevaT.trim().toUpperCase(); if(!t) return;
+    if(!/^[0-9]{1,2}$|^[A-Z]{1,4}$/.test(t)){ toast('Escribe la talla como número (ej. 2, 16) o letras (ej. XXL)'); return; }
+    if(listaTallas.includes(t)){ toast('La talla '+t+' ya está'); return; }
+    const esNum = /^[0-9]+$/.test(t);
+    if(esNum !== CATS_NUMERICAS.includes(f.categoria)){ toast(esNum ? 'Esta categoría usa tallas de letras (XS, S, M...)' : 'Esta categoría usa tallas de número (4, 6, 8...)'); return; }
+    setAgregandoT(true);
+    try{
+      const num = esNum ? [...new Set([...TALLAS_JEANS, t])].sort(cmpTalla) : TALLAS_JEANS;
+      const letras = esNum ? TALLAS_LETRAS : [...new Set([...TALLAS_LETRAS, t])].sort(cmpTalla);
+      await guardarTallasConfig(num, letras);
+      if(!isNew) await DB.asegurarTalla(item.id, t);
+      setF(p=>({...p, tallas:{...p.tallas, [t]: 0}})); setNuevaT('');
+      toast('✓ Talla '+t+' agregada'+(isNew ? '' : '. Para sumarle unidades usa el botón Llegó de la tarjeta.'));
+    }catch(e){ toast('No se pudo agregar la talla: '+(e.message||e)); }
+    setAgregandoT(false);
+  }
 
   async function handleFoto(e){
     const file = e.target.files[0]; if(!file) return;
@@ -983,6 +1003,10 @@ function Editor({item, onSave, onClose}){
                 />
               </div>
             ))}
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center',marginTop:10,flexWrap:'wrap'}}>{/* talla-en-editor */}
+            <input value={nuevaT} onChange={e=>setNuevaT(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); agregarTalla(); } }} placeholder="Nueva talla (ej. 2, 16)" style={{width:170,padding:'9px 12px',border:'1.5px solid var(--border)',borderRadius:10,fontSize:15}}/>
+            <button type="button" className="pk-btn sec" style={{minWidth:0,flex:'none',padding:'9px 14px',fontSize:15}} disabled={agregandoT || !nuevaT.trim()} onClick={agregarTalla}>{agregandoT ? 'Agregando…' : '+ Agregar talla'}</button>
           </div>
         </div>
 
