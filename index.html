@@ -1723,6 +1723,24 @@ function PedidosView({productos}){
         <div className="pk-nota" style={{background:'#FFF7EC',borderColor:'#E8C48A'}}>
           <div><b>🖨️ Guías {T}:</b> {n>0 ? <>{n} pedido(s) con el envío pagado listos para comprar la guía.</> : 'No hay pedidos con el envío pagado pendientes de guía (primero se cobra el envío).'}{!cfgGuias.activa && <> <i>(La compra se activa después de la prueba; por ahora solo puedes ver cuánto costarían.)</i></>}</div>
           {n>0 && p!=='cotizando' && p!=='comprando' && p!=='pdf' && p!=='cotizado' && <button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={cotizarGuias}>{cfgGuias.activa ? '🖨️ Comprar e imprimir guías ('+n+')' : '💲 Ver cuánto costarían ('+n+')'}</button>}
+          {/* reimprimir-compradas (26-nov): volver a imprimir guías YA compradas (no compra nada de nuevo), todas en un solo PDF */}
+          {(()=>{ const ya = empacados.filter(g=>g.filas.some(f=>f.skydropx_compra==='ok')); if(!ya.length || ['cotizando','cotizado','comprando','pdf'].includes(p)) return null;
+            const tG = g => Math.max(...g.filas.filter(f=>f.skydropx_compra==='ok').map(f=>new Date(f.updated_at||f.created_at).getTime())); const ultima = Math.max(...ya.map(tG)); const hoyG = g => tG(g) >= ultima - 30*60000; /* vienen marcadas las de la ÚLTIMA compra */ const horaG = g => new Date(tG(g)).toLocaleString('es-CO',{timeZone:'America/Bogota',weekday:'short',hour:'numeric',minute:'2-digit'});
+            const guiaDe = g => (g.filas.find(f=>f.skydropx_guia)||{}).skydropx_guia || '';
+            if(p!=='reimp') return <div><button className="pk-btn sec" style={{marginTop:10,minWidth:0,flex:'none',padding:'10px 14px',fontSize:16}} onClick={()=>{ const sel = {}; ya.forEach(g=>{ if(hoyG(g)) sel[g.id]=true; }); setGuias({paso:'reimp', sel}); }}>🖨️ Volver a imprimir guías ya compradas ({ya.length})</button></div>;
+            const sel = guias.sel||{}; const m = ya.filter(g=>sel[g.id]);
+            return <div style={{marginTop:8,fontSize:15}}>
+              <div style={{marginBottom:6}}>Marca las que quieres imprimir otra vez (no se compra nada; ya están pagadas). Vienen marcadas las de la última compra.</div>
+              <div style={{display:'flex',gap:8,marginBottom:6}}>
+                <button className="pk-btn sec" style={{minWidth:0,flex:'none',padding:'8px 12px',fontSize:15}} onClick={()=>{ const s2 = {}; ya.forEach(g=>{ s2[g.id]=true; }); setGuias({paso:'reimp', sel:s2}); }}>☑️ Marcar todas</button>
+                <button className="pk-btn sec" style={{minWidth:0,flex:'none',padding:'8px 12px',fontSize:15}} onClick={()=>setGuias({paso:'reimp', sel:{}})}>⬜ Desmarcar todas</button>
+              </div>
+              {ya.map(g=><label key={g.id} style={{display:'flex',alignItems:'center',gap:10,padding:'5px 0',cursor:'pointer'}}><input type="checkbox" style={{width:22,height:22,flex:'none'}} checked={!!sel[g.id]} onChange={e=>{ const v = e.target.checked; setGuias(x=>({...x, sel:{...(x.sel||{}), [g.id]:v}})); }}/><span>{(g.filas[0].envio_nombre||'').trim()} → {g.filas[0].envio_ciudad}{guiaDe(g) ? ' · guía '+guiaDe(g) : ''}{' · comprada '+horaG(g)}</span></label>)}
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
+                <button className="pk-btn ok" style={{minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} disabled={!m.length} onClick={async ()=>{ setGuias({paso:'pdf'}); await armarPdf(m.flatMap(g=>g.filas.map(f=>f.id)), {res: m.map(g=>({ok:true, nombre:(g.filas[0].envio_nombre||'').trim()}))}); }}>🖨️ Imprimir las marcadas ({m.length})</button>
+                <button className="pk-btn sec" style={{minWidth:0,flex:'none',padding:'12px 16px'}} onClick={()=>setGuias({paso:''})}>Cerrar</button>
+              </div>
+            </div>; })()}
           {p==='cotizando' && <div style={{marginTop:8}}>Cotizando con {T}…</div>}
           {p==='cotizado' && guias.cot && <div style={{marginTop:8,fontSize:15}}>
             {cfgGuias.activa && guias.cot.resultados.filter(r=>r.ok).length>1 && <div style={{display:'flex',gap:8,marginBottom:6}}>
