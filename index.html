@@ -619,7 +619,7 @@ async function cargarTallasConfig(){
 }
 /* envio-margen (25-nov): el cobro del envío = lo que cuesta en Skydropx + ENVIO_MARGEN, redondeado al mil de arriba.
    La jefa lo cambia en Ajustes (nf_bot_config 'envio_margen'). Antes era el siguiente múltiplo de $2.000 (8.743 -> 10.000). */
-let ENVIO_MARGEN = 3000;
+let ENVIO_MARGEN = 4000; /* margen-miles-4000 (26-nov, Chispi): se cobra el valor de la guía en miles cerrados + 4.000 → 8.743 → 12.000 · 9.410 → 13.000 · 10.000 → 14.000 (siempre de $3.000 a $4.000 arriba) */
 async function cargarMargenEnvio(){ try{ const {data} = await sb.from('nf_bot_config').select('valor').eq('clave','envio_margen').maybeSingle(); const n = Number(data && data.valor); if(n>=0 && n<=50000) ENVIO_MARGEN = n; }catch(e){} }
 async function guardarTallasConfig(num, letras){
   const ahora = new Date().toISOString();
@@ -1646,7 +1646,7 @@ function PedidosView({productos}){
      envio_valor en el pedido (el bot ya sabe recibir el comprobante del envio y marcarlo pagado) y el mensaje sale por nf_salientes
      (texto normal si la clienta escribio en las ultimas 24 h; si no, plantilla de Meta 'nf_cobro_envio'). */
   const COBRO_CARO = 15000;
-  const valorCobro = precio => Math.ceil((Number(precio) + ENVIO_MARGEN) / 1000) * 1000; /* envio-margen */
+  const valorCobro = precio => Math.floor(Number(precio) / 1000) * 1000 + ENVIO_MARGEN; /* envio-margen + margen-miles-4000 */
   /* cobro-solo-hoy (25-nov, la jefa): "Cobrar envíos" cobra SOLO los pedidos de HOY (hora Colombia). El 25-nov el botón les cobró a 6 clientas de ayer que ya se habían despachado. */
   const _desdeHoyCobro = new Date(hoyCO(0)+'T00:00:00-05:00').getTime();
   const esParaCobroCualquierDia = g => { const f = g.filas[0]||{}; return g.filas.every(x=>x.estado==='listo_para_enviar' && x.empacado && !x.nota_jefa && new Date(x.created_at).getTime() >= SKY_DESDE && !x.skydropx_compra && !(Number(x.envio_valor) > 0) && x.envio_pagado!==true && !x.envio_cobro_at /* nunca cobrar dos veces (ni a los anulados) */) && f.envio_direccion && !/^Recoge en tienda/i.test(f.envio_direccion) && !/monter[ií]a/i.test(f.envio_ciudad||''); };
@@ -2457,7 +2457,7 @@ function AjustesView({prods, onTallas}){
     catch(e){ toast('Error: '+e.message); }
     setGuardando(false);
   }
-  const ejCobro = c => Math.ceil((c + (Number(String(margen).replace(/\D/g,''))||0)) / 1000) * 1000;
+  const ejCobro = c => Math.floor(c / 1000) * 1000 + (Number(String(margen).replace(/\D/g,''))||0);
   if(!estado || !neg) return <div className="loading-page"><div className="spinner"/></div>;
   const pausado = !!estado.bot_pausado, auto = !!estado.autoconfirmar;
   const cambioNeg = JSON.stringify(neg)!==JSON.stringify(negOrig);
@@ -2506,9 +2506,9 @@ function AjustesView({prods, onTallas}){
 
       <div className="aj-box">
         <div className="aj-tit">Cobro de envíos nacionales</div>
-        <div className="aj-ayuda" style={{marginBottom:10}}>Al tocar <b>Cobrar envíos</b>, a la clienta se le cobra lo que cuesta la guía en Skydropx <b>más esta ganancia</b>, redondeado al mil de arriba. Así cubres si la guía sale un poco más cara al comprarla.</div>
-        <div className="field"><label>Ganancia por envío ($)</label><input inputMode="numeric" value={margen} onChange={e=>setMargen(e.target.value)} placeholder="3000"/></div>
-        <div className="aj-ayuda" style={{marginBottom:10}}>Ejemplo: guía de $8.743 → se cobra <b>${ejCobro(8743).toLocaleString('es-CO')}</b> · guía de $9.410 → se cobra <b>${ejCobro(9410).toLocaleString('es-CO')}</b>.</div>
+        <div className="aj-ayuda" style={{marginBottom:10}}>Al tocar <b>Cobrar envíos</b>, a la clienta se le cobra lo que cuesta la guía en Skydropx (en miles cerrados) <b>más esta cantidad</b>. Con 4.000 siempre queda entre $3.000 y $4.000 arriba del costo, para cubrir si la guía sale un poco más cara al comprarla.</div>
+        <div className="field"><label>Ganancia por envío ($)</label><input inputMode="numeric" value={margen} onChange={e=>setMargen(e.target.value)} placeholder="4000"/></div>
+        <div className="aj-ayuda" style={{marginBottom:10}}>Ejemplo: guía de $8.743 → se cobra <b>${ejCobro(8743).toLocaleString('es-CO')}</b> · guía de $9.410 → se cobra <b>${ejCobro(9410).toLocaleString('es-CO')}</b> · guía de $10.000 → se cobra <b>${ejCobro(10000).toLocaleString('es-CO')}</b>.</div>
         <button className="btn btn-primary btn-lg" disabled={guardando || margen===margenOrig} onClick={guardarMargen} style={{width:'100%'}}>{margen===margenOrig?'Sin cambios':'Guardar'}</button>
       </div>
 
