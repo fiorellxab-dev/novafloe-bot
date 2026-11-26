@@ -1434,6 +1434,7 @@ function PedidosView({productos}){
   const [pedidos, setPedidos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState('listo');
+  const [busca, setBusca] = useState(''); /* buscador-pedidos (26-nov): buscar una clienta por nombre, teléfono o ciudad en todos los pedidos */
   const [subiendoSky, setSubiendoSky] = useState(false);
   const [resSky, setResSky] = useState(null);
   const [zona, setZonaS] = useState(()=>{ try{ return localStorage.getItem('nf_zona_pedidos')||'todos'; }catch(e){ return 'todos'; } });
@@ -1654,7 +1655,9 @@ function PedidosView({productos}){
   /* tambien se quedan los que ya pagaron el envio y aun no tienen guia, aunque sean de dias anteriores (cobro-envio-app) */
   const empacados = listos.filter(g=>g.filas.every(f=>f.empacado) && (g.filas.some(envioDeuda) || /* pedidos-simples: los que deben el envío no se pierden */ g.filas.some(f=>new Date(f.created_at).getTime() >= _desdeAyer) || g.filas.some(f=>Number(f.envio_valor)>0 && f.envio_pagado===true && f.skydropx_compra!=='ok' && new Date(f.created_at).getTime() >= GUIAS_DESDE)));
   const esperando = agruparPedidos(pz.filter(p=>p.estado==='pendiente_confirmacion_humana'));
-  const lista = filtro==='mayoreo' ? mayoreoG : filtro==='listo' ? porEmpacar : filtro==='datos' ? faltanDatos : empacados;
+  const _sinT = x => String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); const _q = _sinT(busca).trim(); const _qD = _q.replace(/\D/g,''); /* buscador-pedidos */
+  const buscados = _q ? agruparPedidos(pedidos.filter(p=>p.estado!=='cancelado' && (_sinT((p.envio_nombre||'')+' '+(p.cliente_nombre||'')+' '+(p.envio_ciudad||'')).includes(_q) || (_qD.length>=4 && String((p.cliente_telefono||'')+' '+(p.envio_telefono||'')+' '+(p.telefono_real||'')).includes(_qD))))) : null;
+  const lista = buscados ? buscados : filtro==='mayoreo' ? mayoreoG : filtro==='listo' ? porEmpacar : filtro==='datos' ? faltanDatos : empacados;
   listaRef.current = lista; const clvFotos = filtro + '|' + lista.map(g=>g.filas.map(f=>f.id+(f.envio_pagado?'p':'')+(f.envio_cobro_at?'c':'')).join('.')).join(',');
   useEffect(()=>{ if(['cobros','historial'].includes(filtro)) return; let vivo = true; /* comprobantes-en-tarjeta */
     const ir = ()=>fotosDePagos(listaRef.current.flatMap(g=>g.filas)).then(x=>{ if(vivo) setFotosCobro(x); }).catch(()=>{});
@@ -1675,6 +1678,7 @@ function PedidosView({productos}){
         {/* pedidos-simples (25-nov): Esperando confirmación, Por revisar y Con aviso están en la pestaña Avisos; Falta pagar envío y Cobros de envío se quitaron (el envío se ve en cada tarjeta) */}
         {faltanDatos.length>0 && <button className={`pk-chip ${filtro==='datos'?'on':''}`} onClick={()=>setFiltro('datos')}>Faltan datos ({faltanDatos.length})</button>}
       </div>
+      <input className="cobros-busca" type="search" placeholder="🔍 Buscar clienta por nombre, teléfono o ciudad" value={busca} onChange={e=>setBusca(e.target.value)}/>{/* buscador-pedidos */}
       {filtro==='mayoreo' && <div className="pk-nota" style={{background:'#FFF4D6',borderColor:'#E0B44C'}}><b>📦 Pedidos por mayor</b> (6 o más unidades). <b>Antes de empacar</b>, verifica en el banco que entró <b>todo el dinero</b> del pedido (el total aparece en cada tarjeta) y que los datos de envío estén completos. Cuando lo verifiques, empácalo y toca <b>Ya empaqué este pedido</b>.</div>}
       {filtro==='aviso' && <div className="pk-nota"><b>Estos pedidos tienen un aviso</b>: léelo antes de despachar. Cuando se resuelva, toca <b>Ya lo resolví</b>.</div>}
       {filtro==='envio' && <div className="pk-nota">Estas clientas <b>ya pagaron el jean</b>, pero <b>falta que paguen el envío</b> (o domicilio). Si ya se les envió el cobro desde "Cobrar envíos", cuando manden el comprobante el bot lo marca pagado solo y el pedido vuelve a <b>Ya empacados</b> para comprar la guía. Si pagan por otro lado, toca <b>Envío pagado</b>.</div>}
@@ -1750,12 +1754,12 @@ function PedidosView({productos}){
           </div>}
           {p==='error' && <div style={{marginTop:8,color:'#C0392B'}}>⚠️ {guias.error} <button className="pk-btn sec" style={{marginLeft:8,minWidth:0,flex:'none',padding:'8px 12px'}} onClick={()=>setGuias({paso:''})}>Cerrar</button></div>}
         </div>); })()}
-      {filtro==='historial' ? <HistorialEnvios productos={productos} zona={zona}/> :
+      {filtro==='historial' && !buscados ? <HistorialEnvios productos={productos} zona={zona}/> :
       <div className="pedidos-list">
         {cargando
           ? <div className="loading-page"><div className="spinner"/></div>
           : lista.length===0
-            ? <div className="empty"><p style={{fontSize:18}}>{vacio}</p></div>
+            ? <div className="empty"><p style={{fontSize:18}}>{buscados ? 'No encontré a nadie con "'+busca.trim()+'" en los pedidos de los últimos 14 días.' : vacio}</p></div>
             : lista.map(g=><PedidoEmpaque key={g.id} g={g} productos={productos} onMarcar={marcar} onRevisado={revisado} onEnvioPagado={envioPagado} onQuitarAviso={quitarAviso} puedeSky={!cfgGuias.activa && esParaSky(g)} subiendoSky={subiendoSky} onSky={()=>subirSky(g)} onReimprimir={reimprimir} fotosCobro={fotosCobro} onVerFoto={setFotoGrande}/>)
         }
       </div>}
