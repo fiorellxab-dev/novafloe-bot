@@ -1596,6 +1596,13 @@ function PedidosView({productos}){
       const d = await invocar({accion:'cotizar_guias', ids: lista.flatMap(x=>x.filas.map(f=>f.id))});
       const sel = {}; (d.resultados||[]).forEach(r=>{ if(r.ok && r.precio<=COBRO_CARO) sel[r.clave]=true; });
       setCobro({paso:'cotizado', cot:d, sel, grupos:lista});
+      /* envio-caro-aviso (26-nov, regla de Chispi): si Skydropx no llega o sale caro, NO se cobra y queda en Avisos para revisarlo a mano */
+      try{ const malos = (d.resultados||[]).filter(r=>!r.ok || Number(r.precio)>COBRO_CARO); let n = 0;
+        for(const r of malos){ const ids = r.ids||[]; if(!ids.length) continue;
+          const txt = 'ENVÍO SIN COBRAR: '+(r.ok ? 'con '+(d.transportadora||'Coordinadora')+' cuesta $'+Number(r.precio).toLocaleString('es-CO')+' (caro)' : (d.transportadora||'Coordinadora')+' no lo pudo cotizar ('+String(r.error||'').slice(0,80)+')')+'. No se le cobró. Cotízalo en Skydropx con otra transportadora (Envía o Interrapidísimo suelen salir más baratas), cóbrale ese valor y toca Ya lo resolví.';
+          const u = await sb.from('nf_pedidos').update({nota_jefa: txt}).in('id', ids).is('nota_jefa', null).select('id'); if(u.data && u.data.length) n++; }
+        if(n){ toast(n+' envío(s) caros o sin cobertura quedaron en Avisos (no se cobraron)'); setPedidos(await DB.cargarPedidos()); }
+      }catch(e){}
     }catch(e){ setCobro({paso:'error', error:'No se pudo cotizar: '+(e.message||e)}); }
   }
   async function enviarCobros(){
