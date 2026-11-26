@@ -299,7 +299,7 @@ body{font-family:var(--body);background:var(--mist);color:var(--night);min-heigh
 .visor-caja img{display:block;max-width:100%;max-height:calc(100vh - 110px);object-fit:contain;margin:0 auto;}
 .cobro-fotos-fila img{width:96px;height:128px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border);background:var(--mist);}
 /* envio-en-tarjeta */ .pk-envest{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:16px;border:1.5px solid;}
-.pk-envest.ok{background:#E8F3EC;border-color:#9CCFB0;color:#2F6B4C;} .pk-envest.no{background:#FFF1DC;border-color:#E8C48A;color:#A0522D;} .pk-envest.anu{background:#F1EEF6;border-color:#C9BEDA;color:#5B4B73;} .pk-envest.sin{background:#F4F4F4;border-color:#DDD;color:#555;}
+.pk-envest.ok{background:#E8F3EC;border-color:#9CCFB0;color:#2F6B4C;} .pk-envest.no{background:#FFF1DC;border-color:#E8C48A;color:#A0522D;} .pk-envest.anu{background:#F1EEF6;border-color:#C9BEDA;color:#5B4B73;} .pk-envest.sin{background:#F4F4F4;border-color:#DDD;color:#555;} .pk-envest.jean{background:#EEF4FB;border-color:#9DB8D9;color:#2C5AA0;} /* comprobantes-en-tarjeta */
 .pk-envest b{font-size:19px;} .pk-envest .sub{font-size:15px;font-weight:400;opacity:.9;margin-top:2px;} .pk-envest .fotos{display:flex;gap:8px;} .pk-envest .fotos a{display:flex;flex-direction:column;align-items:center;font-size:11px;color:inherit;text-decoration:none;}
 .pk-envest .fotos img{width:68px;height:90px;object-fit:cover;border-radius:7px;border:1.5px solid rgba(0,0,0,.15);background:#fff;}
 .cobros-busca{width:100%;box-sizing:border-box;padding:12px 14px;font-size:17px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:10px;background:var(--white);}
@@ -1369,21 +1369,28 @@ function PedidoEmpaque({g, productos, onMarcar, onRevisado, onEnvioPagado, onQui
       </div>
       <div className="pk-total">Total del pedido: {fmt(total)}</div>
       {avisoJefa && <div className="pk-revisar" style={{background:'#FDE8E8',borderColor:'#C0392B'}}><b style={{color:'#C0392B'}}>⏸ {avisoJefa}</b><div><button className="pk-btn sec" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onQuitarAviso(g)}>Ya lo resolví (quitar aviso)</button></div></div>}
-      {(()=>{ /* envio-en-tarjeta (25-nov): ¿pagó el envío? con el comprobante al lado. Solo envíos nacionales (Montería paga al recibir). */
-        if(!b.envio_direccion || esRecoge || /monter[ií]a/i.test(b.envio_ciudad||'')) return null;
-        const fc = g.filas.find(f=>f.envio_cobro_at) || g.filas.find(f=>Number(f.envio_valor)>0);
-        const pagado = !deudaEnvio && g.filas.some(f=>f.envio_pagado===true && Number(f.envio_valor)>0);
-        const anulado = !pagado && fc && fc.envio_cobro_at && Number(fc.envio_valor)===0;
+      {(()=>{ /* envio-en-tarjeta + comprobantes-en-tarjeta (25-nov): comprobante del jean y del envío al lado, sin buscar en otra parte */
         const hora = d => new Date(d).toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
-        const desde = fc && fc.envio_cobro_at; const fs = desde ? ((fotosCobro||{})[b.cliente_telefono]||[]).filter(x=>x.at >= desde) : [];
-        const comp = fs.filter(x=>x.envio); const ver = pagado ? (comp.length ? comp.slice(-1) : fs.slice(-1)) : fs.slice(-2);
-        const fotos = ver.length>0 && <div className="fotos">{ver.map(x=><a key={x.url} href={x.url} onClick={e=>{ e.preventDefault(); onVerFoto && onVerFoto({url:x.url, titulo:nombre+' · '+hora(x.at)}); }}><img src={x.url} alt="comprobante" loading="lazy"/><span>{x.envio ? 'comprobante' : 'foto '+hora(x.at)}</span></a>)}</div>;
-        const val = fc && Number(fc.envio_valor)>0 ? ' $'+Number(fc.envio_valor).toLocaleString('es-CO') : '';
-        if(pagado) return <div className="pk-envest ok"><div><b>✅ Envío pagado{val}</b><div className="sub">{comp.length ? 'Toca el comprobante para verlo grande' : 'Marcado como pagado'}</div></div>{fotos}</div>;
-        if(anulado){ const devolver = g.filas.some(f=>/^REVISAR:.*devolver/i.test(String(f.notas||''))); return <div className="pk-envest anu"><div><b>↩️ Envío contra entrega</b><div className="sub">{devolver ? 'Se le cobró por error y ya había pagado: hay que DEVOLVERLE la plata del envío a su Nequi' : 'El cobro del envío se anuló: lo paga al recibir'}</div></div></div>; }
-        if(deudaEnvio && deudaEnvio.envio_cobro_at) return <div className="pk-envest no"><div><b>⏳ No ha pagado el envío{val}</b><div className="sub">Se le cobró {fechaAmable(deudaEnvio.envio_cobro_at).toLowerCase()}{fs.length ? ' · mandó '+(fs.length===1?'una foto':fs.length+' fotos')+' después: revísala' : ''}</div></div>{fotos}</div>;
-        if(!fc && !g.filas.some(f=>f.skydropx_compra==='contraentrega') && g.filas.every(f=>new Date(f.created_at).getTime() >= new Date(hoyCO(0)+'T00:00:00-05:00').getTime())) return /* solo los de hoy: los de antes se fueron contra entrega */ <div className="pk-envest sin"><div><b>💬 Envío sin cobrar todavía</b><div className="sub">Se cobra con "Cobrar envíos" cuando lo empaques</div></div></div>;
-        return null; })()}
+        const ini = Math.min(...g.filas.map(f=>new Date(f.created_at).getTime())) - 10*60e3;
+        const todas = ((fotosCobro||{})[b.cliente_telefono]||[]).filter(x=>new Date(x.at).getTime() >= ini);
+        const mini = (xs, etq) => xs.length>0 && <div className="fotos">{xs.map(x=><a key={x.url} href={x.url} onClick={e=>{ e.preventDefault(); onVerFoto && onVerFoto({url:x.url, titulo:nombre+' · '+etq+' · '+hora(x.at)}); }}><img src={x.url} alt={etq} loading="lazy"/><span>{etq} {hora(x.at)}</span></a>)}</div>;
+        const fJean = todas.filter(x=>x.tipo==='jean').slice(-3);
+        const filaJean = fJean.length>0 && <div className="pk-envest jean"><div><b>🧾 Pago del jean</b><div className="sub">Toca la foto para ver el comprobante</div></div>{mini(fJean,'jean')}</div>;
+        let filaEnv = null;
+        if(b.envio_direccion && !esRecoge && !/monter[ií]a/i.test(b.envio_ciudad||'')){ /* Montería paga el domicilio al recibir */
+          const fc = g.filas.find(f=>f.envio_cobro_at) || g.filas.find(f=>Number(f.envio_valor)>0);
+          const pagado = !deudaEnvio && g.filas.some(f=>f.envio_pagado===true && Number(f.envio_valor)>0);
+          const anulado = !pagado && fc && fc.envio_cobro_at && Number(fc.envio_valor)===0;
+          const fEnv = todas.filter(x=>x.tipo==='envio').slice(-2);
+          const otras = todas.filter(x=>!x.tipo && (!fc || !fc.envio_cobro_at || x.at >= fc.envio_cobro_at)).slice(-2);
+          const val = fc && Number(fc.envio_valor)>0 ? ' $'+Number(fc.envio_valor).toLocaleString('es-CO') : '';
+          if(pagado) filaEnv = <div className="pk-envest ok"><div><b>✅ Envío pagado{val}</b><div className="sub">{fEnv.length ? 'Toca la foto para ver el comprobante' : 'Marcado como pagado (no encontré la foto del comprobante en el chat)'}</div></div>{mini(fEnv,'envío')}</div>;
+          else if(anulado){ const devolver = g.filas.some(f=>/^REVISAR:.*devolver/i.test(String(f.notas||''))); filaEnv = <div className="pk-envest anu"><div><b>↩️ Envío contra entrega</b><div className="sub">{devolver ? 'Se le cobró por error y ya había pagado: hay que DEVOLVERLE la plata del envío a su Nequi' : 'El cobro del envío se anuló: lo paga al recibir'}</div></div>{mini(fEnv,'envío')}</div>; }
+          else if(deudaEnvio) filaEnv = <div className="pk-envest no"><div><b>⏳ No ha pagado el envío{val}</b><div className="sub">{deudaEnvio.envio_cobro_at ? 'Se le cobró '+fechaAmable(deudaEnvio.envio_cobro_at).toLowerCase() : 'Ya se le dijo el valor'}{otras.length ? ' · mandó '+(otras.length===1?'una foto':otras.length+' fotos')+' después: revísala' : ''}</div></div>{mini(otras,'foto')}</div>;
+          else if(!fc && !g.filas.some(f=>f.skydropx_compra==='contraentrega') && g.filas.every(f=>new Date(f.created_at).getTime() >= new Date(hoyCO(0)+'T00:00:00-05:00').getTime())) /* solo los de hoy: los de antes se fueron contra entrega */
+            filaEnv = <div className="pk-envest sin"><div><b>💬 Envío sin cobrar todavía</b><div className="sub">Se cobra con "Cobrar envíos" cuando lo empaques</div></div></div>;
+        }
+        return (filaJean || filaEnv) ? <>{filaJean}{filaEnv}</> : null; })()}
       {deudaEnvio && <div className="pk-revisar"><b>{envioTexto(deudaEnvio)}.</b> {Number(deudaEnvio.envio_valor)===-1 ? 'Confírmalo con la clienta y cóbraselo antes de despachar.' : (deudaEnvio.envio_cobro_at ? 'Ya se le envió el cobro por WhatsApp'+(deudaEnvio.envio_costo_real ? ' (Skydropx: $'+Number(deudaEnvio.envio_costo_real).toLocaleString('es-CO')+')' : '')+'. Cuando mande el comprobante, el bot lo marca pagado solo.' : 'No empaques hasta que lo pague.')}<div><button className="pk-btn ok" style={{marginTop:10,minWidth:0,flex:'none',padding:'12px 16px',fontSize:17}} onClick={()=>onEnvioPagado(g)}>Envío pagado</button></div></div>}
       {/^Recoge en tienda/i.test(b.envio_direccion||'') ? (
         <div className="pk-envio">
@@ -1460,10 +1467,7 @@ function PedidosView({productos}){
 
   /* envio-en-tarjeta (25-nov): comprobantes del envío para mostrarlos en cada tarjeta (sin ir a Cobros de envío) */
   const [fotosCobro, setFotosCobro] = useState({}); const [fotoGrande, setFotoGrande] = useState(null);
-  const pedRef = useRef(pedidos); pedRef.current = pedidos;
-  const clvCobro = pedidos.filter(p=>p.envio_cobro_at).map(p=>p.id+(p.envio_pagado?'p':'')).sort().join(',');
-  useEffect(()=>{ if(!clvCobro) return; let vivo = true; const ir = ()=>fotosTrasCobro(pedRef.current).then(x=>{ if(vivo) setFotosCobro(x); }).catch(()=>{});
-    ir(); const t = setInterval(()=>{ if(document.visibilityState==='visible') ir(); }, 45000); return ()=>{ vivo = false; clearInterval(t); }; },[clvCobro]);
+  const listaRef = useRef([]); /* comprobantes-en-tarjeta: el efecto que carga las fotos está más abajo, después de calcular "lista" */
   async function cargar(){
     setCargando(true);
     try{ setPedidos(await DB.cargarPedidos()); }
@@ -1649,6 +1653,10 @@ function PedidosView({productos}){
   const empacados = sinDeuda.filter(g=>g.filas.every(f=>f.empacado) && (g.filas.some(f=>new Date(f.created_at).getTime() >= _desdeAyer) || g.filas.some(f=>Number(f.envio_valor)>0 && f.envio_pagado===true && f.skydropx_compra!=='ok')));
   const esperando = agruparPedidos(pz.filter(p=>p.estado==='pendiente_confirmacion_humana'));
   const lista = filtro==='mayoreo' ? mayoreoG : filtro==='aviso' ? conAviso :filtro==='envio' ? porCobrarEnvio : filtro==='listo' ? porEmpacar : filtro==='esperando' ? esperando : filtro==='revisar' ? porRevisar : filtro==='datos' ? faltanDatos : empacados;
+  listaRef.current = lista; const clvFotos = filtro + '|' + lista.map(g=>g.filas.map(f=>f.id+(f.envio_pagado?'p':'')+(f.envio_cobro_at?'c':'')).join('.')).join(',');
+  useEffect(()=>{ if(['cobros','historial'].includes(filtro)) return; let vivo = true; /* comprobantes-en-tarjeta */
+    const ir = ()=>fotosDePagos(listaRef.current.flatMap(g=>g.filas)).then(x=>{ if(vivo) setFotosCobro(x); }).catch(()=>{});
+    ir(); const t = setInterval(()=>{ if(document.visibilityState==='visible') ir(); }, 45000); return ()=>{ vivo = false; clearInterval(t); }; },[clvFotos]);
   const vacio = {mayoreo:'No hay pedidos por mayor pendientes.', listo:'No hay pedidos por empacar por ahora. Cuando llegue uno, aparece aquí solo.',esperando:'No hay pagos en revisión.', hechos:'Todavía no has marcado pedidos como empacados.',revisar:'No hay pagos por revisar.',datos:'No hay clientas pendientes de mandar sus datos.'}[filtro];
 
   return (
@@ -1771,6 +1779,25 @@ async function fotosTrasCobro(filas){
   const c = await sb.from('nf_conversaciones').select('telefono,created_at,rol,contenido,foto_publica').in('telefono', tels).gte('created_at', desde).order('created_at',{ascending:false}).limit(3000);
   const msgs = (c.data||[]).slice().reverse(); const por = {};
   msgs.forEach((m,i)=>{ if(m.rol!=='user' || !m.foto_publica) return; const sig = msgs.slice(i+1).find(x=>x.telefono===m.telefono && x.rol==='assistant'); (por[m.telefono] = por[m.telefono] || []).push({url:m.foto_publica, at:m.created_at, envio: !!(sig && /pago de tu env[ií]o|env[ií]o.{0,40}(pagado|registrado|recib)/i.test(String(sig.contenido||'')))}); });
+  return por;
+}
+/* comprobantes-en-tarjeta (25-nov): TODAS las fotos de pago de las clientas, clasificadas por lo que respondió el bot justo después:
+   tipo 'envio' ("Recibí el pago de tu envío…") o 'jean' ("tu pago quedó registrado…"); '' = otra foto. Se consulta de a 40 clientas. */
+async function fotosDePagos(filas){
+  const fl = (filas||[]).filter(f=>f.cliente_telefono); const tels = [...new Set(fl.map(f=>f.cliente_telefono))]; if(!tels.length) return {};
+  const desde = new Date(fl.reduce((m,f)=>Math.min(m, new Date(f.created_at).getTime(), f.envio_cobro_at ? new Date(f.envio_cobro_at).getTime() : Infinity), Date.now()) - 3600e3).toISOString();
+  const por = {};
+  for(let i=0;i<tels.length;i+=40){
+    const c = await sb.from('nf_conversaciones').select('telefono,created_at,rol,contenido,foto_publica').in('telefono', tels.slice(i,i+40)).gte('created_at', desde).order('created_at',{ascending:false}).limit(4000);
+    const sig = {}; /* recorre de lo más nuevo a lo más viejo: sig[tel] = la respuesta del bot que vino DESPUÉS de cada mensaje */
+    for(const m of (c.data||[])){
+      if(m.rol==='assistant'){ sig[m.telefono] = String(m.contenido||''); continue; }
+      if(m.rol!=='user' || !m.foto_publica) continue;
+      const t = sig[m.telefono] || '';
+      const tipo = /pago de tu env[ií]o|env[ií]o.{0,40}(pagado|registrado|recib)/i.test(t) ? 'envio' : /(pago|comprobante|transferencia).{0,40}(qued[oó] registrad|registrad|recib|confirmad)|recib[ií] tu (pago|comprobante)/i.test(t) ? 'jean' : '';
+      (por[m.telefono] = por[m.telefono] || []).unshift({url:m.foto_publica, at:m.created_at, tipo, envio: tipo==='envio'});
+    }
+  }
   return por;
 }
 /* visor-comprobante: la foto se ve encima, con X para cerrar (o Esc / tocar afuera), sin abrir otra pestaña */
